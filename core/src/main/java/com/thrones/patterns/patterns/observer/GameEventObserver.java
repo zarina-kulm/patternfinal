@@ -1,4 +1,5 @@
 package com.thrones.patterns.patterns.observer;
 
-public class GameEventObserver {
+public interface GameEventObserver {
+    void onEvent(GameEventType type, Object data);
 }
