@@ -106,7 +106,7 @@ public class HeroSelectScreen implements Screen {
         if (Gdx.input.isKeyJustPressed(Input.Keys.LEFT)) selected=(selected-1+3)%3;
         if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
             GameStateSingleton.getInstance().setSelectedHeroType(heroTypes[selected]);
-            game.setScreen(new MainMenuScreen(game));
+            game.setScreen(new GameScreen(game));
         }
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE))
             game.setScreen(new MainMenuScreen(game));
