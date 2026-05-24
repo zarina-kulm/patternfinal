@@ -37,4 +37,20 @@ public abstract class Enemy extends Character {
     public int getExpReward() { return expReward; }
     public Character getTarget() { return target; }
     public EnemyState getCurrentState() { return currentState; }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setHealth(float health) {
+        this.hp = health;
+    }
+
+    public void setMaxHealth(float maxHealth) {
+        this.maxHp = maxHealth;
+    }
+
+    public void setDamage(float damage) {
+        this.attack = damage;
+    }
 }
