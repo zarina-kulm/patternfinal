@@ -4,6 +4,9 @@ public class GameStateSingleton {
 
     private static GameStateSingleton instance;
 
+    public static final int MAX_LEVEL = 7;
+    public static final int PART_TWO_START_LEVEL = 5;
+
     private int score;
     private int gold;
     private int level;
@@ -58,8 +61,8 @@ public class GameStateSingleton {
     public void nextLevel() {
         level++;
 
-        if (level > 9) {
-            level = 9;
+        if (level > MAX_LEVEL) {
+            level = MAX_LEVEL;
             victory = true;
         }
 
@@ -73,8 +76,8 @@ public class GameStateSingleton {
             this.level = 1;
         }
 
-        if (this.level > 9) {
-            this.level = 9;
+        if (this.level > MAX_LEVEL) {
+            this.level = MAX_LEVEL;
         }
 
         this.wave = this.level;
@@ -82,6 +85,18 @@ public class GameStateSingleton {
 
     public void nextWave() {
         nextLevel();
+    }
+
+    public boolean isPartOne() {
+        return level < PART_TWO_START_LEVEL;
+    }
+
+    public boolean isPartTwo() {
+        return level >= PART_TWO_START_LEVEL;
+    }
+
+    public int getMaxLevel() {
+        return MAX_LEVEL;
     }
 
     public int getScore() {

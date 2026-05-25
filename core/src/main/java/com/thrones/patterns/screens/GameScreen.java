@@ -141,6 +141,17 @@ public class GameScreen implements Screen {
     private float abilityCD = 0f;
     private float shieldCD = 0f;
 
+    private float swordRainCD = 0f;
+    private float healCD = 0f;
+    private float dashCD = 0f;
+
+    private static final float SWORD_RAIN_CD = 10f;
+    private static final float HEAL_CD = 12f;
+    private static final float DASH_CD = 4f;
+
+    private boolean dashActive = false;
+    private float dashTimer = 0f;
+
     private boolean shieldActive = false;
     private float shieldTimer = 0f;
 
@@ -215,9 +226,19 @@ public class GameScreen implements Screen {
 
     private void loadAssets() {
         try {
-            battleBackground = new Texture(Gdx.files.internal("background2.jpeg"));
+            if (state.getLevel() <= 4) {
+                battleBackground =
+                    new Texture(Gdx.files.internal("background2.jpeg"));
+            } else {
+                battleBackground =
+                    new Texture(Gdx.files.internal("backgroundpart2.jpeg"));
+            }
         } catch (Exception e) {
+
             battleBackground = null;
+
+            System.out.println("BACKGROUND ERROR!");
+            e.printStackTrace();
         }
 
         try {
@@ -460,6 +481,17 @@ public class GameScreen implements Screen {
         if (abilityCD > 0) abilityCD -= delta;
         if (shieldCD > 0) shieldCD -= delta;
         if (msgTimer > 0) msgTimer -= delta;
+        if (swordRainCD > 0) swordRainCD -= delta;
+        if (healCD > 0) healCD -= delta;
+        if (dashCD > 0) dashCD -= delta;
+
+        if (dashActive) {
+            dashTimer -= delta;
+
+            if (dashTimer <= 0) {
+                dashActive = false;
+            }
+        }
 
         if (shieldActive) {
             shieldTimer -= delta;
@@ -541,6 +573,17 @@ public class GameScreen implements Screen {
 
         if (Gdx.input.isKeyJustPressed(Input.Keys.E)) {
             useSpecialAbility();
+        }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.R)) {
+            summonSwordRain();
+        }
+
+        if (Gdx.input.isKeyJustPressed(Input.Keys.F)) {
+            useHealPotion();
+        }
+
+        if (Gdx.input.isKeyJustPressed(Input.Keys.SHIFT_LEFT)) {
+            dash();
         }
 
         if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_1)) selectTarget(0);
@@ -1053,17 +1096,29 @@ public class GameScreen implements Screen {
         if (screenChanging) return;
 
         levelStartTimer += delta;
-
         if (levelStartTimer <= 1.5f) return;
 
-        if (facade.isBattleOver(hero, enemies)) {
+        // Hero өлді ме?
+        if (!hero.isAlive()) {
             screenChanging = true;
             stopMusic();
+            state.setGameOver(true);
+            game.setScreen(new GameOverScreen(game));
+            return;
+        }
 
-            if (state.isGameOver() || !hero.isAlive()) {
-                game.setScreen(new GameOverScreen(game));
-                return;
+        // Барлық жау өлді ме?
+        boolean allDead = true;
+        for (Enemy e : enemies) {
+            if (e.isAlive()) {
+                allDead = false;
+                break;
             }
+        }
+
+        if (allDead) {
+            screenChanging = true;
+            stopMusic();
 
             if (state.getLevel() >= 9) {
                 state.setVictory(true);
@@ -1253,5 +1308,78 @@ public class GameScreen implements Screen {
         }
 
         renderer.end();
+    }
+    private void summonSwordRain() {
+
+        if (swordRainCD > 0) {
+            msg("Sword Rain cooldown!", Color.GRAY);
+            return;
+        }
+
+        for (Enemy enemy : enemies) {
+
+            if (!enemy.isAlive()) continue;
+
+            float damage = hero.getAttack() * 2.5f;
+
+            enemy.takeDamage(damage);
+
+            rewardIfDead(enemy);
+        }
+
+        swordRainCD = SWORD_RAIN_CD;
+
+        msg("⚔ Sword Rain activated!", Color.GOLD);
+    }
+
+    private void useHealPotion() {
+        if (healCD > 0) {
+            msg("Potion cooldown!", Color.GRAY);
+            return;
+        }
+
+        float healAmount = 45f;
+
+        float missingHp = hero.getMaxHp() - hero.getHp();
+        float realHeal = Math.min(healAmount, missingHp);
+
+        if (realHeal <= 0) {
+            msg("HP already full!", Color.GRAY);
+            return;
+        }
+
+        hero.heal(realHeal);
+
+        healCD = HEAL_CD;
+
+        msg("+" + (int) realHeal + " HP restored!", Color.GREEN);
+    }
+    private void dash() {
+
+        if (dashCD > 0) {
+            msg("Dash cooldown!", Color.GRAY);
+            return;
+        }
+
+        dashActive = true;
+        dashTimer = 0.25f;
+
+        float dashDistance = 170f;
+
+        if (heroVx < 0) {
+            hero.setPosition(
+                Math.max(20, hero.getX() - dashDistance),
+                hero.getY()
+            );
+        } else {
+            hero.setPosition(
+                Math.min(1220, hero.getX() + dashDistance),
+                hero.getY()
+            );
+        }
+
+        dashCD = DASH_CD;
+
+        msg("⚡ DASH!", Color.CYAN);
     }
 }
