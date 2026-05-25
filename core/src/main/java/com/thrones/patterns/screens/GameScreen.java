@@ -1,36 +1,14 @@
 package com.thrones.patterns.screens;
 
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Input;
-import com.badlogic.gdx.Screen;
-import com.badlogic.gdx.audio.Music;
-import com.badlogic.gdx.audio.Sound;
-import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.GL20;
-import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.graphics.g2d.TextureRegion;
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.badlogic.gdx.math.MathUtils;
-import com.thrones.patterns.WarOfRealms;
-import com.thrones.patterns.characters.Hero;
-import com.thrones.patterns.enemies.Enemy;
-import com.thrones.patterns.patterns.builder.BattleConfig;
-import com.thrones.patterns.patterns.builder.BattleConfigBuilder;
-import com.thrones.patterns.patterns.facade.BattleFacade;
-import com.thrones.patterns.patterns.factory.HeroFactory;
-import com.thrones.patterns.patterns.prototype.EnemyPrototypeRegistry;
-import com.thrones.patterns.patterns.singleton.GameStateSingleton;
-import com.thrones.patterns.utils.CharacterRenderer;
+import com.badlogic.gdx.Gdx;import com.badlogic.gdx.Input;import com.badlogic.gdx.Screen;import com.badlogic.gdx.audio.Music;import com.badlogic.gdx.audio.Sound;import com.badlogic.gdx.graphics.Color;import com.badlogic.gdx.graphics.GL20;import com.badlogic.gdx.graphics.Texture;import com.badlogic.gdx.graphics.g2d.BitmapFont;import com.badlogic.gdx.graphics.g2d.TextureRegion;import com.badlogic.gdx.graphics.glutils.ShapeRenderer;import com.badlogic.gdx.math.MathUtils;import com.thrones.patterns.WarOfRealms;import com.thrones.patterns.characters.Hero;import com.thrones.patterns.enemies.Enemy;import com.thrones.patterns.patterns.builder.BattleConfig;import com.thrones.patterns.patterns.builder.BattleConfigBuilder;import com.thrones.patterns.patterns.facade.BattleFacade;import com.thrones.patterns.patterns.factory.HeroFactory;import com.thrones.patterns.patterns.prototype.EnemyPrototypeRegistry;import com.thrones.patterns.patterns.singleton.GameStateSingleton;import com.thrones.patterns.utils.CharacterRenderer;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.ArrayList;import java.util.List;
 
 public class GameScreen implements Screen {
 
     // ═══════════════════════════════════════
-    // KNIGHT ANIMATOR — ішкі класс
-    // ═══════════════════════════════════════
+// KNIGHT ANIMATOR — ішкі класс
+// ═══════════════════════════════════════
     private static class KnightAnimator {
         enum State { IDLE, RUN, ATTACK, HURT, DEAD, JUMP }
 
@@ -108,8 +86,8 @@ public class GameScreen implements Screen {
     }
 
     // ═══════════════════════════════════════
-    // MAIN FIELDS
-    // ═══════════════════════════════════════
+// MAIN FIELDS
+// ═══════════════════════════════════════
     private final WarOfRealms game;
     private final BattleFacade facade;
     private final GameStateSingleton state;
@@ -128,9 +106,11 @@ public class GameScreen implements Screen {
     private static final float GOBLIN_FRAME_TIME = 0.12f;
     private static final float GOBLIN_DRAW_WIDTH = 170f;
     private static final float GOBLIN_DRAW_HEIGHT = 125f;
+
     private Texture whitewalkerTex;
     private Texture archerTex;
     private Texture mageTex;
+    private Texture bombTex;
 
     private Music battleMusic;
     private Sound swordSwingSound;
@@ -158,6 +138,17 @@ public class GameScreen implements Screen {
 
     private boolean dashActive = false;
     private float dashTimer = 0f;
+
+    private static int bombsRemaining = 3;
+    private float bombCD = 0f;
+    private boolean bombEffect = false;
+    private float bombEffectTimer = 0f;
+    private float bombEffectX = 0f;
+    private float bombEffectY = 0f;
+
+    private static final int MAX_BOMBS = 3;
+    private static final float BOMB_CD = 2.5f;
+    private static final float BOMB_RADIUS = 360f;
 
     private boolean shieldActive = false;
     private float shieldTimer = 0f;
@@ -194,6 +185,8 @@ public class GameScreen implements Screen {
     private static final float HERO_INVINCIBLE_TIME = 0.7f;
     private static final float KNOCKBACK = 55f;
 
+    private static final float HERO_DAMAGE_MULTIPLIER = 0.55f;
+
     private static final float MIN_X = 20f;
     private static final float MAX_X = 1220f;
     private static final float MIN_Y = 70f;
@@ -222,6 +215,10 @@ public class GameScreen implements Screen {
 
         if (state.getLevel() < 1) {
             state.setLevel(1);
+        }
+
+        if (state.getLevel() == 1 && state.getScore() == 0) {
+            bombsRemaining = MAX_BOMBS;
         }
 
         currentLevel = CampaignLevel.get(state.getLevel());
@@ -283,6 +280,7 @@ public class GameScreen implements Screen {
 
         try {
             goblinTex = new Texture(Gdx.files.internal("goblin.png"));
+            goblinTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
         } catch (Exception e) {
             goblinTex = null;
         }
@@ -323,6 +321,12 @@ public class GameScreen implements Screen {
             mageTex = null;
         }
 
+        try {
+            bombTex = new Texture(Gdx.files.internal("bomb2.png"));
+        } catch (Exception e) {
+            bombTex = null;
+        }
+
         if ("KNIGHT".equals(state.getSelectedHeroType())) {
             knightAnimator = new KnightAnimator();
         }
@@ -348,9 +352,13 @@ public class GameScreen implements Screen {
 
         for (String enemyType : currentLevel.enemies) {
             try {
-                enemies.add(registry.spawn(enemyType));
+                Enemy enemy = registry.spawn(enemyType);
+                scaleEnemyForLevel(enemy);
+                enemies.add(enemy);
             } catch (Exception e) {
-                enemies.add(registry.spawn("GOBLIN"));
+                Enemy enemy = registry.spawn("GOBLIN");
+                scaleEnemyForLevel(enemy);
+                enemies.add(enemy);
             }
         }
 
@@ -383,6 +391,29 @@ public class GameScreen implements Screen {
         facade.setupBattle(config);
 
         msg("LEVEL " + state.getLevel() + " — " + currentLevel.title, Color.GOLD);
+    }
+
+
+    private void scaleEnemyForLevel(Enemy enemy) {
+        float hpMultiplier = 1f;
+
+        if (state.getLevel() >= 4) {
+            hpMultiplier = 1.45f;
+        }
+
+        if (state.getLevel() >= 6) {
+            hpMultiplier = 1.75f;
+        }
+
+        if (hpMultiplier <= 1f) {
+            return;
+        }
+
+        float bonusHp = enemy.getMaxHp() * (hpMultiplier - 1f);
+
+        // Most Enemy classes do not expose setHp/setMaxHp.
+        // Negative damage safely works as a small HP boost in this project.
+        enemy.takeDamage(-bonusHp);
     }
 
     @Override
@@ -454,7 +485,7 @@ public class GameScreen implements Screen {
     }
 
     private void updateEnemies(float delta) {
-        float speedBonus = 1f + state.getLevel() * 0.07f;
+        float speedBonus = 1f + state.getLevel() * 0.075f;
 
         for (int i = 0; i < enemies.size(); i++) {
             Enemy enemy = enemies.get(i);
@@ -475,25 +506,35 @@ public class GameScreen implements Screen {
                     MathUtils.clamp(enemy.getY() + moveY * ENEMY_SPEED * speedBonus * delta, MIN_Y, MAX_Y)
                 );
             } else {
-                if (!shieldActive && heroInvincibleTimer <= 0 && enemyAttackTimer[i] <= 0) {
-                    float enemyDamage = enemy.getAttack() * (1f + state.getLevel() * 0.08f);
+                if (!shieldActive && heroInvincibleTimer <= 0f && enemyAttackTimer[i] <= 0f) {
+                    float enemyDamageMultiplier = 0.95f;
+
+                    if (state.getLevel() >= 4) {
+                        enemyDamageMultiplier = 1.25f;
+                    }
+
+                    if (state.getLevel() >= 6) {
+                        enemyDamageMultiplier = 1.55f;
+                    }
+
+                    float enemyDamage = enemy.getAttack() * 0.65f;
 
                     hero.takeDamage(enemyDamage);
 
                     heroHit = true;
-                    heroHitTimer = 0.18f;
+                    heroHitTimer = 0.25f;
                     heroInvincibleTimer = HERO_INVINCIBLE_TIME;
                     enemyAttackTimer[i] = ENEMY_ATTACK_COOLDOWN;
 
-                    float knockX = dx < 0 ? 1f : -1f;
-                    float knockY = dy < 0 ? 1f : -1f;
+                    float knockX = dx < 0 ? 28f : -28f;
+                    float knockY = dy < 0 ? 14f : -14f;
 
                     hero.setPosition(
-                        MathUtils.clamp(hero.getX() + knockX * 25f, MIN_X, MAX_X),
-                        MathUtils.clamp(hero.getY() + knockY * 25f, MIN_Y, MAX_Y)
+                        MathUtils.clamp(hero.getX() + knockX, MIN_X, MAX_X),
+                        MathUtils.clamp(hero.getY() + knockY, MIN_Y, MAX_Y)
                     );
 
-                    msg(enemy.getName() + " attacked you! -" + (int) enemyDamage, Color.RED);
+                    msg(enemy.getName() + " attacked you! -" + (int) enemyDamage + " HP", Color.RED);
                 }
             }
 
@@ -509,12 +550,20 @@ public class GameScreen implements Screen {
         if (swordRainCD > 0) swordRainCD -= delta;
         if (healCD > 0) healCD -= delta;
         if (dashCD > 0) dashCD -= delta;
+        if (bombCD > 0) bombCD -= delta;
 
         if (dashActive) {
             dashTimer -= delta;
 
             if (dashTimer <= 0) {
                 dashActive = false;
+            }
+        }
+
+        if (bombEffect) {
+            bombEffectTimer -= delta;
+            if (bombEffectTimer <= 0f) {
+                bombEffect = false;
             }
         }
 
@@ -603,6 +652,10 @@ public class GameScreen implements Screen {
             summonSwordRain();
         }
 
+        if (Gdx.input.isKeyJustPressed(Input.Keys.B)) {
+            useBomb();
+        }
+
         if (Gdx.input.isKeyJustPressed(Input.Keys.F)) {
             useHealPotion();
         }
@@ -648,7 +701,7 @@ public class GameScreen implements Screen {
 
         if (swordSwingSound != null) swordSwingSound.play(0.6f);
 
-        float damage = hero.getAttack() * getWeaponBonus();
+        float damage = hero.getAttack() * HERO_DAMAGE_MULTIPLIER * getWeaponBonus();
         target.takeDamage(damage);
 
         if (distance < 1f) distance = 1f;
@@ -747,6 +800,55 @@ public class GameScreen implements Screen {
         abilityCD = ABILITY_CD;
     }
 
+
+    private void useBomb() {
+        if (bombsRemaining <= 0) {
+            msg("No bombs left!", Color.RED);
+            return;
+        }
+
+        if (bombCD > 0) {
+            msg("Bomb cooldown: " + (int) bombCD + "s", Color.GRAY);
+            return;
+        }
+
+        bombsRemaining--;
+        bombCD = BOMB_CD;
+
+        bombEffect = true;
+        bombEffectTimer = 0.55f;
+        bombEffectX = hero.getX() + 45f;
+        bombEffectY = hero.getY() + 75f;
+
+        boolean hitAny = false;
+
+        for (int i = 0; i < enemies.size(); i++) {
+            Enemy enemy = enemies.get(i);
+            if (!enemy.isAlive()) continue;
+
+            // Bomb is a rare ultimate item: it kills every alive enemy on the current level.
+            enemy.takeDamage(enemy.getMaxHp() * 10f);
+            hitAny = true;
+
+            if (i < enemyHit.length) {
+                enemyHit[i] = true;
+                enemyHitTimer[i] = 0.35f;
+            }
+
+            if (i < enemyShakeTimer.length) {
+                enemyShakeTimer[i] = 0.45f;
+            }
+
+            rewardIfDead(enemy);
+        }
+
+        if (fireSound != null) {
+            fireSound.play(1f);
+        }
+
+        msg(hitAny ? "BOOM! Enemies destroyed!" : "BOOM! No enemies left!", Color.ORANGE);
+    }
+
     private void rewardIfDead(Enemy enemy) {
         int index = enemies.indexOf(enemy);
 
@@ -803,10 +905,10 @@ public class GameScreen implements Screen {
         int frameIndex;
 
         if (distance <= ENEMY_ATTACK_RANGE + 10f) {
-            // Соғысқанда spritesheet соңғы 3 кадрын қолданамыз.
+            // Attack frames: last 3 frames from the spritesheet.
             frameIndex = 5 + ((int) (time / GOBLIN_FRAME_TIME) % 3);
         } else {
-            // Жүгіргенде ортадағы кадрлар.
+            // Run frames: middle frames from the spritesheet.
             frameIndex = 1 + ((int) (time / GOBLIN_FRAME_TIME + enemyIndex) % 4);
         }
 
@@ -881,7 +983,6 @@ public class GameScreen implements Screen {
 
             sr.begin(ShapeRenderer.ShapeType.Filled);
             sr.setColor(1f, 0.9f, 0.3f, alpha * 0.8f);
-
             float sx = hero.getX() + 45f;
             float sy = hero.getY() + 80f;
             sr.rectLine(sx, sy, sx + direction * 60f * alpha, sy - 25f * alpha, 5f);
@@ -1009,56 +1110,85 @@ public class GameScreen implements Screen {
             sr.circle(hero.getX() + 40, hero.getY() + 60, 55, 20);
             sr.end();
         }
+
+        if (bombEffect) {
+            float progress = Math.max(0f, bombEffectTimer / 0.55f);
+            float expand = 1f - progress;
+
+            game.batch.begin();
+
+            if (bombTex != null) {
+                game.batch.setColor(Color.WHITE);
+
+                float size = 120f + 90f * expand;
+
+                game.batch.draw(
+                    bombTex,
+                    bombEffectX - size / 2f,
+                    bombEffectY - size / 2f,
+                    size,
+                    size
+                );
+            }
+
+            font.getData().setScale(2.8f);
+            font.setColor(Color.ORANGE);
+            font.draw(game.batch, "BOOM!", bombEffectX - 85f, bombEffectY + 130f);
+
+            font.getData().setScale(1f);
+            game.batch.setColor(Color.WHITE);
+
+            game.batch.end();
+        }
     }
 
     private void drawHUD() {
         font.getData().setScale(1f);
-        font.setColor(Color.GOLD);
-        font.draw(game.batch, "GAME OF THRONES: THE LAST STAND", 365, 714);
 
-        font.getData().setScale(0.85f);
+        font.setColor(Color.GOLD);
+        font.draw(game.batch, "THRONES OF PATTERNS", 500, 714);
+
+        font.getData().setScale(0.9f);
+
         font.setColor(Color.WHITE);
-        font.draw(game.batch, "Level: " + state.getLevel() + "/9", 20, 695);
+        font.draw(game.batch, "Level " + state.getLevel() + "/7", 20, 695);
 
-        font.setColor(Color.GOLD);
-        font.draw(game.batch, currentLevel.title, 20, 672);
-
-        font.setColor(Color.LIGHT_GRAY);
-        font.draw(game.batch, currentLevel.objective, 20, 649);
+        font.setColor(Color.GREEN);
+        font.draw(game.batch, "HP: " + (int) hero.getHp() + "/" + (int) hero.getMaxHp(), 20, 670);
 
         font.setColor(Color.YELLOW);
-        font.draw(game.batch, "Gold: " + state.getGold(), 20, 626);
-
-        font.setColor(Color.CYAN);
-        font.draw(game.batch, "Score: " + state.getScore(), 20, 603);
-
-        font.setColor(Color.WHITE);
-        font.draw(game.batch, hero.getName() + " Lv." + hero.getLevel(), 20, 580);
+        font.draw(game.batch, "Gold: " + state.getGold(), 20, 645);
 
         font.setColor(Color.ORANGE);
-        font.draw(game.batch, "Weapon: " + getWeaponName() + " x" + String.format("%.2f", getWeaponBonus()), 20, 557);
-
-        float hpPct = hero.getHp() / hero.getMaxHp();
-        font.setColor(hpPct > 0.5f ? Color.GREEN : hpPct > 0.25f ? Color.ORANGE : Color.RED);
-        font.draw(game.batch, "HP: " + (int) hero.getHp() + "/" + (int) hero.getMaxHp(), 20, 534);
+        font.draw(game.batch, "Bombs: " + bombsRemaining + "/" + MAX_BOMBS, 20, 620);
 
         if (shieldActive) {
             font.setColor(Color.CYAN);
-            font.draw(game.batch, "SHIELD ACTIVE!", 20, 511);
+            font.draw(game.batch, "Shield active", 20, 595);
         }
 
         font.setColor(Color.LIGHT_GRAY);
-        font.draw(game.batch, "ENEMY REALM:", 1030, 695);
+        font.draw(game.batch, "Enemies:", 1030, 695);
 
         for (int i = 0; i < enemies.size(); i++) {
             Enemy enemy = enemies.get(i);
-            font.setColor(i == targetIndex && enemy.isAlive() ? Color.YELLOW : enemy.isAlive() ? Color.WHITE : Color.DARK_GRAY);
+
+            font.setColor(
+                i == targetIndex && enemy.isAlive()
+                    ? Color.YELLOW
+                    : enemy.isAlive()
+                    ? Color.WHITE
+                    : Color.DARK_GRAY
+            );
+
+            float shownHp = Math.max(0f, enemy.getHp());
 
             font.draw(
                 game.batch,
-                (i + 1) + ". " + enemy.getName() + (enemy.isAlive() ? " HP: " + (int) enemy.getHp() : " [DEAD]"),
+                (i + 1) + ". " + enemy.getName() +
+                    (enemy.isAlive() ? " HP: " + (int) shownHp : " [DEAD]"),
                 1030,
-                672 - i * 22
+                670 - i * 22
             );
         }
 
@@ -1072,16 +1202,17 @@ public class GameScreen implements Screen {
         int spacing = 20;
 
         font.setColor(Color.WHITE);
-        font.draw(game.batch, "[W/A/S/D] Move around the map", 20, y);
+        font.draw(game.batch, "[W/A/S/D] Move", 20, y);
 
         font.setColor(attackCD > 0 ? Color.GRAY : Color.GREEN);
-        font.draw(game.batch, "[SPACE] Sword Attack" + (attackCD > 0 ? " (Cooling)" : " [READY]"), 20, y - spacing);
+        font.draw(game.batch, "[SPACE] Attack" + (attackCD > 0 ? " (Cooling)" : " [READY]"), 20, y - spacing);
 
-        cd("[Q]", "Defensive Shield", shieldCD, Color.CYAN, y - spacing * 2);
-        cd("[E]", "House Special Ability", abilityCD, Color.ORANGE, y - spacing * 3);
+        cd("[Q]", "Shield", shieldCD, Color.CYAN, y - spacing * 2);
+        cd("[E]", "Hero Skill", abilityCD, Color.ORANGE, y - spacing * 3);
+        cd("[B]", "Bomb", bombCD, Color.ORANGE, y - spacing * 4);
 
         font.setColor(Color.DARK_GRAY);
-        font.draw(game.batch, "[1-5] Target  |  [TAB] Next  |  [ESC] Menu", 20, y - spacing * 4 - 4);
+        font.draw(game.batch, "[TAB] Target  |  [ESC] Menu", 20, y - spacing * 5 - 4);
 
         font.getData().setScale(1f);
     }
@@ -1108,7 +1239,7 @@ public class GameScreen implements Screen {
     private void drawHPBars() {
         sr.begin(ShapeRenderer.ShapeType.Filled);
 
-        float hp = hero.getHp() / hero.getMaxHp();
+        float hp = MathUtils.clamp(hero.getHp() / hero.getMaxHp(), 0f, 1f);
 
         sr.setColor(0.15f, 0.15f, 0.15f, 1f);
         sr.rect(hero.getX(), hero.getY() + 175, 130, 10);
@@ -1119,7 +1250,7 @@ public class GameScreen implements Screen {
         for (Enemy enemy : enemies) {
             if (!enemy.isAlive()) continue;
 
-            float ep = enemy.getHp() / enemy.getMaxHp();
+            float ep = MathUtils.clamp(enemy.getHp() / enemy.getMaxHp(), 0f, 1f);
 
             sr.setColor(0.15f, 0.15f, 0.15f, 1f);
             sr.rect(enemy.getX(), enemy.getY() + 125, 75, 8);
@@ -1168,7 +1299,9 @@ public class GameScreen implements Screen {
             game.setScreen(new GameOverScreen(game));
             return;
         }
-
+        if (bombEffect) {
+            return;
+        }
         // Барлық жау өлді ме?
         boolean allDead = true;
         for (Enemy e : enemies) {
@@ -1182,7 +1315,7 @@ public class GameScreen implements Screen {
             screenChanging = true;
             stopMusic();
 
-            if (state.getLevel() >= 9) {
+            if (state.getLevel() >= 7) {
                 state.setVictory(true);
                 game.setScreen(new VictoryScreen(game));
             } else {
@@ -1261,12 +1394,13 @@ public class GameScreen implements Screen {
         if (whitewalkerTex != null) whitewalkerTex.dispose();
         if (archerTex != null) archerTex.dispose();
         if (mageTex != null) mageTex.dispose();
+        if (bombTex != null) bombTex.dispose();
         if (knightAnimator != null) knightAnimator.dispose();
     }
 
     // ═══════════════════════════════════════
-    // CAMPAIGN LEVELS
-    // ═══════════════════════════════════════
+// CAMPAIGN LEVELS
+// ═══════════════════════════════════════
     private static class CampaignLevel {
         int level;
         String title;
@@ -1285,31 +1419,34 @@ public class GameScreen implements Screen {
         static CampaignLevel get(int level) {
             switch (level) {
                 case 1:
-                    return new CampaignLevel(1, "Border Ambush", "Defeat the goblin scouts.", "ui/backgrounds/level1.png", new String[]{"GOBLIN", "GOBLIN"});
+                    return new CampaignLevel(1, "Border Ambush", "Defeat the first scouts.", "background2.jpeg",
+                        new String[]{"GOBLIN", "GOBLIN"});
                 case 2:
-                    return new CampaignLevel(2, "Burned Village", "Survive the orc ambush.", "ui/backgrounds/level2.png", new String[]{"GOBLIN", "GOBLIN", "ORC"});
+                    return new CampaignLevel(2, "Burned Village", "Survive the orc ambush.", "background2.jpeg",
+                        new String[]{"GOBLIN", "GOBLIN", "ORC"});
                 case 3:
-                    return new CampaignLevel(3, "Castle Gate", "Break through the first royal guards.", "ui/backgrounds/level3.png", new String[]{"GOBLIN", "ORC", "DARK_KNIGHT"});
+                    return new CampaignLevel(3, "Castle Gate", "Break through the enemy formation.", "background2.jpeg",
+                        new String[]{"GOBLIN", "ORC", "ORC", "DARK_KNIGHT"});
                 case 4:
-                    return new CampaignLevel(4, "Hall of Betrayal", "Kill the knight who betrayed your bloodline.", "ui/backgrounds/level4.png", new String[]{"ORC", "DARK_KNIGHT", "DARK_KNIGHT"});
+                    return new CampaignLevel(4, "Northern War", "Defeat the commander of the first realm.", "background2.jpeg",
+                        new String[]{"ORC", "DARK_KNIGHT", "DARK_KNIGHT", "NECROMANCER"});
                 case 5:
-                    return new CampaignLevel(5, "Siege of Ironkeep", "Defeat the fortress army.", "ui/backgrounds/level5.png", new String[]{"GOBLIN", "ORC", "ORC", "DARK_KNIGHT"});
+                    return new CampaignLevel(5, "Frozen Road", "Enter the second realm.", "backgroundpart2.jpeg",
+                        new String[]{"ORC", "DARK_KNIGHT", "NECROMANCER"});
                 case 6:
-                    return new CampaignLevel(6, "Necromancer Crypt", "Stop the dead army from rising.", "ui/backgrounds/level6.png", new String[]{"ORC", "DARK_KNIGHT", "NECROMANCER"});
+                    return new CampaignLevel(6, "Dragon Valley", "Survive the dragon assault.", "backgroundpart2.jpeg",
+                        new String[]{"DARK_KNIGHT", "NECROMANCER", "DRAGON"});
                 case 7:
-                    return new CampaignLevel(7, "Dragon Valley", "Face the first dragon.", "ui/backgrounds/level7.png", new String[]{"ORC", "DARK_KNIGHT", "DRAGON"});
-                case 8:
-                    return new CampaignLevel(8, "War of Five Houses", "Survive the united enemy houses.", "ui/backgrounds/level8.png", new String[]{"GOBLIN", "ORC", "DARK_KNIGHT", "NECROMANCER", "DRAGON"});
-                case 9:
                 default:
-                    return new CampaignLevel(9, "The Black Throne", "Defeat the ancient dragons and claim the throne.", "ui/backgrounds/level9.png", new String[]{"DARK_KNIGHT", "NECROMANCER", "DRAGON", "DRAGON"});
+                    return new CampaignLevel(7, "The Black Throne", "Defeat the final army and claim the throne.", "backgroundpart2.jpeg",
+                        new String[]{"DARK_KNIGHT", "NECROMANCER", "DRAGON", "DRAGON"});
             }
         }
     }
 
     // ═══════════════════════════════════════
-    // SNOWFLAKES
-    // ═══════════════════════════════════════
+// SNOWFLAKES
+// ═══════════════════════════════════════
     private static class Snowflake {
         float x;
         float y;
