@@ -162,6 +162,7 @@ public class GameOverScreen implements Screen {
         sr.end();
         game.batch.begin();
 
+
         // ── YOUR RESULTS ──
         font.getData().setScale(1.15f);
         font.setColor(new Color(1f, 0.92f, 0.6f, 1f));

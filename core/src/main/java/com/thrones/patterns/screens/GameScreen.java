@@ -1518,5 +1518,4 @@ public class GameScreen implements Screen {
 
         msg("⚡ DASH!", Color.CYAN);
     }
-
 }

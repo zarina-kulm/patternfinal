@@ -4,6 +4,7 @@ public class GameStateSingleton {
 
     private static GameStateSingleton instance;
 
+
     public static final int MAX_LEVEL = 7;
     public static final int PART_TWO_START_LEVEL = 5;
 
