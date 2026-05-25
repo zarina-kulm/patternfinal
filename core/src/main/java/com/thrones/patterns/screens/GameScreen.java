@@ -117,13 +117,11 @@ public class GameScreen implements Screen {
 
     private void loadAssets() {
         try {
-            battleBackground = new Texture(currentLevel.background);
+            battleBackground = new Texture(Gdx.files.internal("background2.jpeg"));
+            System.out.println("BACKGROUND LOADED!");
         } catch (Exception e) {
-            try {
-                battleBackground = new Texture("ui/backgrounds/battle_bg.png");
-            } catch (Exception ignored) {
-                battleBackground = null;
-            }
+            battleBackground = null;
+            System.out.println("BACKGROUND NOT FOUND!");
         }
 
         try {
@@ -216,14 +214,15 @@ public class GameScreen implements Screen {
     @Override
     public void render(float delta) {
         time += delta;
-        Gdx.gl.glClearColor(0.01f, 0.005f, 0.012f, 1f);
+
+        Gdx.gl.glClearColor(1, 1, 1, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
         update(delta);
+
         drawBattleBackground();
-        updateSnowfield(delta);
-        renderSnowfield(sr);
-        drawScene();
+
+//        drawScene();
         drawCharacters();
 
         game.batch.begin();
@@ -234,6 +233,7 @@ public class GameScreen implements Screen {
 
         drawHPBars();
         drawTarget();
+
         checkLevelEnd(delta);
     }
 
@@ -483,28 +483,36 @@ public class GameScreen implements Screen {
     }
 
     private void drawBattleBackground() {
-        game.batch.begin();
-        if (battleBackground != null) {
-            game.batch.setColor(0.55f, 0.55f, 0.6f, 1f);
-            game.batch.draw(battleBackground, 0, 0, 1280, 720);
-            game.batch.setColor(Color.WHITE);
-        }
-        game.batch.end();
 
-        sr.begin(ShapeRenderer.ShapeType.Filled);
-        sr.setColor(0f, 0f, 0f, 0.35f);
-        sr.rect(0, 0, 1280, 720);
-        sr.end();
+        game.batch.begin();
+
+        if (battleBackground != null) {
+
+            game.batch.setColor(1f, 1f, 1f, 1f);
+
+            game.batch.draw(
+                battleBackground,
+                0,
+                0,
+                1280,
+                720
+            );
+        }
+
+        game.batch.end();
     }
 
     private void drawScene() {
         sr.begin(ShapeRenderer.ShapeType.Filled);
 
+        // Тек төменгі жер ғана салынады
         sr.setColor(0.10f, 0.065f, 0.035f, 1f);
         sr.rect(0, 0, 1280, GROUND);
+
         sr.setColor(0.32f, 0.23f, 0.12f, 1f);
         sr.rect(0, GROUND - 4, 1280, 8);
 
+        // Castle blocks керек болмаса, төмендегі блоктарды өшіріп тастауға болады
         sr.setColor(0.045f, 0.035f, 0.07f, 1f);
         sr.rect(75, GROUND, 80, 190);
         sr.rect(155, GROUND, 120, 120);
@@ -513,25 +521,6 @@ public class GameScreen implements Screen {
         sr.rect(995, GROUND, 120, 115);
         sr.rect(1065, GROUND, 55, 145);
 
-        if (state.getLevel() >= 3) {
-            sr.setColor(0.12f, 0.12f, 0.14f, 1f);
-            sr.circle(430, GROUND + 18, 24);
-            sr.circle(455, GROUND + 14, 18);
-        }
-        if (state.getLevel() >= 5) {
-            sr.setColor(0.10f, 0.06f, 0.03f, 1f);
-            sr.rect(650, GROUND, 12, 90);
-            sr.rectLine(656, GROUND + 70, 610, GROUND + 110, 5);
-            sr.rectLine(656, GROUND + 55, 700, GROUND + 95, 5);
-        }
-        if (state.getLevel() >= 7) {
-            sr.setColor(0.09f, 0.09f, 0.11f, 1f);
-            sr.triangle(820, GROUND, 900, GROUND, 860, GROUND + 95);
-            sr.triangle(870, GROUND, 950, GROUND, 910, GROUND + 125);
-        }
-
-        sr.setColor(0.25f, 0.02f, 0.02f, 0.25f);
-        sr.rect(0, GROUND, 1280, 45);
         sr.end();
     }
 
