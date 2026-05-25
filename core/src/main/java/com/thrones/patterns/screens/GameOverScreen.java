@@ -26,7 +26,7 @@ public class GameOverScreen implements Screen {
     private String selectedQuote;
 
     private static final String[] QUOTES = {
-        "You never sat on the Iron Throne...",
+        "     You never sat on the Iron Throne...",
         "The realm has no mercy for the weak.",
         "Winter came. And so did your end.",
         "The throne remains cold and empty.",
@@ -148,7 +148,7 @@ public class GameOverScreen implements Screen {
         font.getData().setScale(3.2f);
         float tp = (float)(Math.sin(time * 1.8f) * 0.15f + 0.85f);
         font.setColor(tp, tp * 0.75f, 0f, 1f);
-        font.draw(game.batch, "GAME  OVER", 355, 610);
+        font.draw(game.batch, "     GAME  OVER", 355, 610);
 
         // ── Атмосфералық сөз ──
         font.getData().setScale(0.95f);
@@ -204,7 +204,7 @@ public class GameOverScreen implements Screen {
         font.setColor(new Color(0.85f, 0.8f, 0.7f, 1f));
         font.draw(game.batch, "Best level:", 310, ry);
         font.setColor(new Color(1f, 0.85f, 0.2f, 1f));
-        font.draw(game.batch, bestLevel + " / 9", 780, ry);
+        font.draw(game.batch, bestLevel + " /7", 780, ry);
 
         font.setColor(new Color(0.85f, 0.8f, 0.7f, 1f));
         font.draw(game.batch, "Best score:", 310, ry - 28);

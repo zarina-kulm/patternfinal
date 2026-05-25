@@ -1,6 +1,6 @@
 package com.thrones.patterns.screens;
 
-import com.badlogic.gdx.Gdx;import com.badlogic.gdx.Input;import com.badlogic.gdx.Screen;import com.badlogic.gdx.audio.Music;import com.badlogic.gdx.audio.Sound;import com.badlogic.gdx.graphics.Color;import com.badlogic.gdx.graphics.GL20;import com.badlogic.gdx.graphics.Texture;import com.badlogic.gdx.graphics.g2d.BitmapFont;import com.badlogic.gdx.graphics.glutils.ShapeRenderer;import com.badlogic.gdx.math.MathUtils;import com.thrones.patterns.WarOfRealms;import com.thrones.patterns.characters.Hero;import com.thrones.patterns.enemies.Enemy;import com.thrones.patterns.patterns.builder.BattleConfig;import com.thrones.patterns.patterns.builder.BattleConfigBuilder;import com.thrones.patterns.patterns.facade.BattleFacade;import com.thrones.patterns.patterns.factory.HeroFactory;import com.thrones.patterns.patterns.prototype.EnemyPrototypeRegistry;import com.thrones.patterns.patterns.singleton.GameStateSingleton;import com.thrones.patterns.utils.CharacterRenderer;
+import com.badlogic.gdx.Gdx;import com.badlogic.gdx.Input;import com.badlogic.gdx.Screen;import com.badlogic.gdx.audio.Music;import com.badlogic.gdx.audio.Sound;import com.badlogic.gdx.graphics.Color;import com.badlogic.gdx.graphics.GL20;import com.badlogic.gdx.graphics.Texture;import com.badlogic.gdx.graphics.g2d.BitmapFont;import com.badlogic.gdx.graphics.g2d.TextureRegion;import com.badlogic.gdx.graphics.glutils.ShapeRenderer;import com.badlogic.gdx.math.MathUtils;import com.thrones.patterns.WarOfRealms;import com.thrones.patterns.characters.Hero;import com.thrones.patterns.enemies.Enemy;import com.thrones.patterns.patterns.builder.BattleConfig;import com.thrones.patterns.patterns.builder.BattleConfigBuilder;import com.thrones.patterns.patterns.facade.BattleFacade;import com.thrones.patterns.patterns.factory.HeroFactory;import com.thrones.patterns.patterns.prototype.EnemyPrototypeRegistry;import com.thrones.patterns.patterns.singleton.GameStateSingleton;import com.thrones.patterns.utils.CharacterRenderer;
 
 import java.util.ArrayList;import java.util.List;
 
@@ -100,6 +100,13 @@ public class GameScreen implements Screen {
 
     private Texture battleBackground;
     private Texture goblinTex;
+    private Texture goblinSheet;
+    private TextureRegion[] goblinFrames;
+    private static final int GOBLIN_FRAME_COUNT = 8;
+    private static final float GOBLIN_FRAME_TIME = 0.12f;
+    private static final float GOBLIN_DRAW_WIDTH = 170f;
+    private static final float GOBLIN_DRAW_HEIGHT = 125f;
+
     private Texture whitewalkerTex;
     private Texture archerTex;
     private Texture mageTex;
@@ -273,8 +280,27 @@ public class GameScreen implements Screen {
 
         try {
             goblinTex = new Texture(Gdx.files.internal("goblin.png"));
+            goblinTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
         } catch (Exception e) {
             goblinTex = null;
+        }
+
+        try {
+            goblinSheet = new Texture(Gdx.files.internal("goblin_spritesheet.png"));
+            goblinSheet.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+
+            int frameWidth = goblinSheet.getWidth() / GOBLIN_FRAME_COUNT;
+            int frameHeight = goblinSheet.getHeight();
+
+            TextureRegion[][] split = TextureRegion.split(goblinSheet, frameWidth, frameHeight);
+            goblinFrames = new TextureRegion[GOBLIN_FRAME_COUNT];
+
+            for (int i = 0; i < GOBLIN_FRAME_COUNT; i++) {
+                goblinFrames[i] = split[0][i];
+            }
+        } catch (Exception e) {
+            goblinSheet = null;
+            goblinFrames = null;
         }
 
         try {
@@ -868,6 +894,28 @@ public class GameScreen implements Screen {
         game.batch.end();
     }
 
+
+    private TextureRegion getGoblinAnimationFrame(int enemyIndex, Enemy enemy) {
+        if (goblinFrames == null || goblinFrames.length == 0) return null;
+
+        float dx = hero.getX() - enemy.getX();
+        float dy = hero.getY() - enemy.getY();
+        float distance = (float) Math.sqrt(dx * dx + dy * dy);
+
+        int frameIndex;
+
+        if (distance <= ENEMY_ATTACK_RANGE + 10f) {
+            // Attack frames: last 3 frames from the spritesheet.
+            frameIndex = 5 + ((int) (time / GOBLIN_FRAME_TIME) % 3);
+        } else {
+            // Run frames: middle frames from the spritesheet.
+            frameIndex = 1 + ((int) (time / GOBLIN_FRAME_TIME + enemyIndex) % 4);
+        }
+
+        frameIndex = MathUtils.clamp(frameIndex, 0, GOBLIN_FRAME_COUNT - 1);
+        return goblinFrames[frameIndex];
+    }
+
     private void drawCharacters() {
         game.batch.begin();
 
@@ -1000,7 +1048,22 @@ public class GameScreen implements Screen {
                     break;
             }
 
-            if (enemyTexture != null) {
+            if (enemy.getType().equals("GOBLIN") && goblinFrames != null) {
+                TextureRegion goblinFrame = getGoblinAnimationFrame(i, enemy);
+
+                if (hit) game.batch.setColor(1f, 0.3f, 0.3f, 1f);
+                else game.batch.setColor(Color.WHITE);
+
+                game.batch.draw(
+                    goblinFrame,
+                    enemy.getX() - 45 + shakeX,
+                    enemy.getY() - 10 + enemyBob,
+                    GOBLIN_DRAW_WIDTH,
+                    GOBLIN_DRAW_HEIGHT
+                );
+
+                game.batch.setColor(Color.WHITE);
+            } else if (enemyTexture != null) {
                 if (hit) game.batch.setColor(1f, 0.3f, 0.3f, 1f);
                 else game.batch.setColor(Color.WHITE);
 
@@ -1327,6 +1390,7 @@ public class GameScreen implements Screen {
         if (enemyDeathSound != null) enemyDeathSound.dispose();
         if (fireSound != null) fireSound.dispose();
         if (goblinTex != null) goblinTex.dispose();
+        if (goblinSheet != null) goblinSheet.dispose();
         if (whitewalkerTex != null) whitewalkerTex.dispose();
         if (archerTex != null) archerTex.dispose();
         if (mageTex != null) mageTex.dispose();
