@@ -539,47 +539,85 @@ public class GameScreen implements Screen {
         game.batch.begin();
 
         // ── ГЕРОЙ АНИМАЦИЯСЫ ──
-        // Жүгіру — боб
         float bobY = 0f;
-        if (heroVx != 0 && isGrounded) {
-            bobY = (float)(Math.sin(heroRunCycle) * 5f);
-        }
-
-        // Шабуыл — алға секіру
+        float tiltAngle = 0f;
+        float scaleW = 1f;
+        float scaleH = 1f;
         float attackOffsetX = 0f;
         float attackOffsetY = 0f;
+        float breathe = (float)(Math.sin(time * 1.5f) * 2f);
+
+        // Жүгіру
+        if (heroVx != 0 && isGrounded) {
+            bobY = (float)(Math.sin(heroRunCycle) * 6f);
+            tiltAngle = heroVx > 0 ? -12f : 12f;
+            scaleH = 1f + (float)(Math.sin(heroRunCycle * 2f) * 0.06f);
+            scaleW = 1f - (float)(Math.sin(heroRunCycle * 2f) * 0.04f);
+        }
+
+        // Шабуыл
         if (isAttacking) {
             float progress = 1f - (attackAnimTimer / 0.3f);
-            attackOffsetX = (float)(Math.sin(progress * Math.PI)) * 25f;
-            attackOffsetY = (float)(Math.sin(progress * Math.PI)) * 8f;
+            attackOffsetX = (float)(Math.sin(progress * Math.PI)) * 30f;
+            attackOffsetY = (float)(Math.sin(progress * Math.PI)) * 10f;
+            tiltAngle = (float)(Math.sin(progress * Math.PI)) * -25f;
+            scaleH = 1f + (float)(Math.sin(progress * Math.PI)) * 0.1f;
         }
 
-        // Секіру — созылу
-        float scaleH = 1f;
+        // Секіру
         if (!isGrounded) {
-            scaleH = heroVy > 0 ? 1.1f : 0.95f;
+            scaleH = heroVy > 0 ? 1.15f : 0.9f;
+            scaleW = heroVy > 0 ? 0.9f : 1.1f;
+            tiltAngle = heroVy > 0 ? -5f : 5f;
         }
+
+        float drawX = hero.getX() - 10 + attackOffsetX;
+        float drawY = hero.getY() + bobY + attackOffsetY + breathe;
 
         if (heroTex != null) {
-            if (heroHit) game.batch.setColor(1f, 0.3f, 0.3f, 1f);
-            else game.batch.setColor(Color.WHITE);
-            game.batch.draw(heroTex,
-                hero.getX() - 10 + attackOffsetX,
-                hero.getY() + bobY + attackOffsetY,
-                80, 140f * scaleH);
+            if (heroHit) {
+                float flicker = (float)(Math.sin(time * 30f) * 0.5f + 0.5f);
+                game.batch.setColor(1f, flicker * 0.4f, flicker * 0.4f, 1f);
+            } else {
+                game.batch.setColor(Color.WHITE);
+            }
+
+            game.batch.draw(
+                heroTex,
+                drawX, drawY,
+                40f, 0f,
+                80f * scaleW, 140f * scaleH,
+                1f, 1f,
+                tiltAngle,
+                0, 0,
+                heroTex.getWidth(), heroTex.getHeight(),
+                false, false
+            );
             game.batch.setColor(Color.WHITE);
         } else {
             game.batch.end();
             if (hero.getType().equals("MAGE")) {
-                CharacterRenderer.drawMage(sr, hero.getX() + attackOffsetX,
-                    hero.getY() + bobY, 1f, time, heroHit);
+                CharacterRenderer.drawMage(sr, drawX, drawY, 1f, time, heroHit);
             } else if (hero.getType().equals("ARCHER")) {
-                CharacterRenderer.drawArcher(sr, hero.getX() + attackOffsetX,
-                    hero.getY() + bobY, 1f, time, heroHit);
+                CharacterRenderer.drawArcher(sr, drawX, drawY, 1f, time, heroHit);
             } else {
-                CharacterRenderer.drawKnight(sr, hero.getX() + attackOffsetX,
-                    hero.getY() + bobY, 1f, time, heroHit);
+                CharacterRenderer.drawKnight(sr, drawX, drawY, 1f, time, heroHit);
             }
+            game.batch.begin();
+        }
+
+        // Шабуыл кезінде қылыш жарқылы
+        if (isAttacking) {
+            game.batch.end();
+            float progress = 1f - (attackAnimTimer / 0.3f);
+            float alpha = (float)(Math.sin(progress * Math.PI));
+            sr.begin(ShapeRenderer.ShapeType.Filled);
+            sr.setColor(1f, 0.9f, 0.3f, alpha * 0.8f);
+            float sx = drawX + 80f + 10;
+            float sy = drawY + 70f;
+            sr.rectLine(sx, sy, sx + 55f * alpha, sy - 25f * alpha, 5f);
+            sr.rectLine(sx, sy, sx + 45f * alpha, sy + 15f * alpha, 3f);
+            sr.end();
             game.batch.begin();
         }
 
@@ -612,8 +650,11 @@ public class GameScreen implements Screen {
                 shakeX = (float)(Math.sin(enemyShakeTimer[i] * 40f) * 6f);
             }
 
-            // Жүру боб анимациясы
+            // Жүру боб
             float enemyBob = (float)(Math.sin(time * 4f + i) * 3f);
+
+            // Жау да алға еңкейеді (жүру иллюзиясы)
+            float enemyTilt = -8f;
 
             Texture enemyTex = null;
             float w = 70, h = 110;
@@ -632,10 +673,19 @@ public class GameScreen implements Screen {
             if (enemyTex != null) {
                 if (hit) game.batch.setColor(1f, 0.3f, 0.3f, 1f);
                 else game.batch.setColor(Color.WHITE);
-                game.batch.draw(enemyTex,
+
+                game.batch.draw(
+                    enemyTex,
                     enemy.getX() - 5 + shakeX,
                     enemy.getY() + enemyBob,
-                    w, h);
+                    w / 2, 0f,
+                    w, h,
+                    1f, 1f,
+                    enemyTilt,
+                    0, 0,
+                    enemyTex.getWidth(), enemyTex.getHeight(),
+                    false, false
+                );
                 game.batch.setColor(Color.WHITE);
             } else {
                 game.batch.end();
