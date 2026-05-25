@@ -43,17 +43,12 @@ public class GameOverScreen implements Screen {
         this.font = new BitmapFont();
         this.sr = new ShapeRenderer();
 
-        try {
-            bgTexture = new Texture(Gdx.files.internal("overground.jpeg"));
-        } catch (Exception e) {
-            bgTexture = null;
-            System.out.println("overground.jpeg табылмады: " + e.getMessage());
-        }
+        // Обязательно проверь, чтобы имя файла совпадало с твоей картинкой в папке assets!
+        bgTexture = new Texture(Gdx.files.internal("background3.jpeg"));
 
         GameStateSingleton state = GameStateSingleton.getInstance();
         currentScore = state.getScore();
         currentLevel = state.getLevel();
-
         loadAndSaveRecords();
         selectedQuote = QUOTES[(int)(Math.random() * QUOTES.length)];
     }
@@ -84,37 +79,53 @@ public class GameOverScreen implements Screen {
 
     @Override
     public void render(float delta) {
+        // Очищаем экран стандартным черным цветом перед каждым кадром
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+
         time += delta;
 
-        // ── ФОН — толық экранға ──
+        // ── 1. ОТРИСОВКА КАРТИНКИ ФОНА ──
         game.batch.begin();
         if (bgTexture != null) {
             game.batch.setColor(1f, 1f, 1f, 1f);
             game.batch.draw(bgTexture, 0, 0, 1280, 720);
         } else {
-            // Фон жоқ болса қараңғы фон
+            // Если текстура вдруг не загрузилась, зальем красивым темно-синим цветом
             Gdx.gl.glClearColor(0.05f, 0.06f, 0.12f, 1f);
             Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
         }
         game.batch.end();
 
-        // ── OVERLAY — тек аздап қараңғылату (0.35 ғана!) ──
+        // ── 2. ЭФФЕКТ ЗАТЕМНЕНИЯ (OVERLAY) ──
+        // Включаем OpenGL блендинг, чтобы прозрачность (0.35f) заработала и не перекрывала фон наглухо
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+
         sr.begin(ShapeRenderer.ShapeType.Filled);
         sr.setColor(0f, 0f, 0f, 0.35f);
         sr.rect(0, 0, 1280, 720);
         sr.end();
 
+        Gdx.gl.glDisable(GL20.GL_BLEND); // Выключаем после использования
+
+        // Рисуем панели результатов и обрабатываем ввод
         drawPanel();
         handleInput();
     }
 
     private void drawPanel() {
+        // Включаем блендинг для полупрозрачной центральной панели
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+
         // ── ПАНЕЛЬ — мөлдір қараңғы ──
         sr.begin(ShapeRenderer.ShapeType.Filled);
         sr.setColor(0f, 0f, 0f, 0.6f);
         sr.rect(240, 75, 800, 570);
         sr.end();
+
+        Gdx.gl.glDisable(GL20.GL_BLEND); // Отключаем блендинг для сплошных линий жиека
 
         // ── ПАНЕЛЬ ЖИЕГІ — алтын түс ──
         sr.begin(ShapeRenderer.ShapeType.Line);
@@ -201,15 +212,21 @@ public class GameOverScreen implements Screen {
 
         game.batch.end();
 
+        // Включаем блендинг для полупрозрачного фона кнопки под текстом
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+
         // ── Батырма фоны ──
         sr.begin(ShapeRenderer.ShapeType.Filled);
-        sr.setColor(0.5f, 0.38f, 0.08f, 0.4f);
+        sr.setColor(0.5f, 0.38f, 0.08f, 0.5f);
         sr.rect(280, ry - 56, 720, 1);
 
         float bp = (float)(Math.sin(time * 2f) * 0.08f + 0.12f);
         sr.setColor(bp * 4, bp * 3, 0f, 0.7f);
         sr.rect(290, ry - 108, 265, 38);
         sr.end();
+
+        Gdx.gl.glDisable(GL20.GL_BLEND);
 
         sr.begin(ShapeRenderer.ShapeType.Line);
         sr.setColor(0.8f, 0.6f, 0.1f, 0.9f);
