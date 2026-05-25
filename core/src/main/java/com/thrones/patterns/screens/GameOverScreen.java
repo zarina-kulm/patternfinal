@@ -171,7 +171,7 @@ public class GameOverScreen implements Screen {
         font.setColor(new Color(0.85f, 0.8f, 0.7f, 1f));
         font.draw(game.batch, "Level reached:", 310, 487);
         font.setColor(new Color(1f, 0.9f, 0.3f, 1f));
-        font.draw(game.batch, currentLevel + " / 9", 780, 487);
+        font.draw(game.batch, currentLevel + " / 7", 780, 487);
 
         font.setColor(new Color(0.85f, 0.8f, 0.7f, 1f));
         font.draw(game.batch, "Final score:", 310, 458);
