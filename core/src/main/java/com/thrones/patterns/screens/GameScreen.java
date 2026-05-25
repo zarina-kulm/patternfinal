@@ -27,6 +27,75 @@ import java.util.List;
 
 public class GameScreen implements Screen {
 
+    // ═══════════════════════════════════════
+    // KNIGHT ANIMATOR — ішкі класс
+    // ═══════════════════════════════════════
+    private static class KnightAnimator {
+        enum State { IDLE, RUN, ATTACK, HURT, DEAD, JUMP }
+
+        private Texture idle;
+        private final Texture[] run = new Texture[4];
+        private final Texture[] attack = new Texture[3];
+        private Texture hurt, dead, jump;
+
+        private State currentState = State.IDLE;
+        private float stateTimer = 0f;
+
+        private static final float RUN_FRAME = 0.12f;
+        private static final float ATK_FRAME = 0.1f;
+
+        KnightAnimator() {
+            idle    = load("knight_idle.png");
+            for (int i = 0; i < 4; i++) run[i]    = load("knight_run"    + (i+1) + ".png");
+            for (int i = 0; i < 3; i++) attack[i] = load("knight_attack" + (i+1) + ".png");
+            hurt = load("knight_hurt.png");
+            dead = load("knight_dead.png");
+            jump = load("knight_jump.png");
+        }
+
+        private Texture load(String name) {
+            try { return new Texture(Gdx.files.internal(name)); }
+            catch (Exception e) { return null; }
+        }
+
+        void setState(State s) {
+            if (currentState != s) { currentState = s; stateTimer = 0f; }
+        }
+
+        void update(float delta) { stateTimer += delta; }
+
+        Texture getFrame() {
+            switch (currentState) {
+                case RUN:
+                    int rf = (int)(stateTimer / RUN_FRAME) % 4;
+                    return run[rf] != null ? run[rf] : idle;
+                case ATTACK:
+                    int af = Math.min((int)(stateTimer / ATK_FRAME), 2);
+                    return attack[af] != null ? attack[af] : idle;
+                case HURT: return hurt != null ? hurt : idle;
+                case DEAD: return dead != null ? dead : idle;
+                case JUMP: return jump != null ? jump : idle;
+                default:   return idle;
+            }
+        }
+
+        boolean isAttackDone() {
+            return currentState == State.ATTACK && stateTimer >= ATK_FRAME * 3;
+        }
+
+        void dispose() {
+            if (idle != null) idle.dispose();
+            for (Texture t : run)    if (t != null) t.dispose();
+            for (Texture t : attack) if (t != null) t.dispose();
+            if (hurt != null) hurt.dispose();
+            if (dead != null) dead.dispose();
+            if (jump != null) jump.dispose();
+        }
+    }
+
+    // ═══════════════════════════════════════
+    // АЙНЫМАЛЫЛАР
+    // ═══════════════════════════════════════
     private final WarOfRealms game;
     private final BattleFacade facade;
     private final GameStateSingleton state;
@@ -38,24 +107,26 @@ public class GameScreen implements Screen {
     private BitmapFont font;
 
     private Texture battleBackground;
-    private Texture heroTex;
     private Texture goblinTex;
     private Texture whitewalkerTex;
+    private Texture archerTex;
+    private Texture mageTex;
+
     private Music battleMusic;
     private Sound swordSwingSound;
     private Sound swordHitSound;
     private Sound enemyDeathSound;
     private Sound fireSound;
 
-    private CampaignLevel currentLevel;
+    private KnightAnimator knightAnimator;
 
+    private CampaignLevel currentLevel;
     private int targetIndex = 0;
     private float time = 0f;
 
     private float attackCD = 0f;
     private float abilityCD = 0f;
     private float shieldCD = 0f;
-
     private boolean shieldActive = false;
     private float shieldTimer = 0f;
 
@@ -68,6 +139,9 @@ public class GameScreen implements Screen {
 
     private boolean[] enemyHit;
     private float[] enemyHitTimer;
+    private float[] enemyShakeTimer;
+    private float[] enemyDeathTimer;
+    private boolean[] enemyDying;
 
     private float levelStartTimer = 0f;
     private boolean screenChanging = false;
@@ -77,7 +151,6 @@ public class GameScreen implements Screen {
     private static final float HERO_SPEED = 300f;
     private static final float JUMP_FORCE = 550f;
     private static final float ENEMY_SPEED = 105f;
-
     private static final float ATTACK_CD = 0.4f;
     private static final float ABILITY_CD = 4f;
     private static final float SHIELD_CD = 6f;
@@ -85,30 +158,29 @@ public class GameScreen implements Screen {
     private float heroVx = 0f;
     private float heroVy = 0f;
     private boolean isGrounded = true;
-
-    // Анимация айнымалылары
-    private float attackAnimTimer = 0f;
     private boolean isAttacking = false;
+    private float attackAnimTimer = 0f;
     private float heroRunCycle = 0f;
-    private float[] enemyShakeTimer;
-    private float[] enemyDeathTimer;
-    private boolean[] enemyDying;
 
     private List<Snowflake> snowflakesList;
 
+    // ═══════════════════════════════════════
+    // CONSTRUCTOR
+    // ═══════════════════════════════════════
     public GameScreen(WarOfRealms game) {
         this.game = game;
         this.facade = new BattleFacade();
         this.state = GameStateSingleton.getInstance();
     }
 
+    // ═══════════════════════════════════════
+    // SHOW
+    // ═══════════════════════════════════════
     @Override
     public void show() {
         sr = new ShapeRenderer();
         font = new BitmapFont();
-
         if (state.getLevel() < 1) state.setLevel(1);
-
         currentLevel = CampaignLevel.get(state.getLevel());
         loadAssets();
         setupLevel();
@@ -118,11 +190,7 @@ public class GameScreen implements Screen {
     private void loadAssets() {
         try {
             battleBackground = new Texture(Gdx.files.internal("background2.jpeg"));
-            System.out.println("BACKGROUND LOADED!");
-        } catch (Exception e) {
-            battleBackground = null;
-            System.out.println("BACKGROUND NOT FOUND!");
-        }
+        } catch (Exception e) { battleBackground = null; }
 
         try {
             battleMusic = Gdx.audio.newMusic(Gdx.files.internal("sounds/battle_theme.mp3"));
@@ -131,40 +199,28 @@ public class GameScreen implements Screen {
             battleMusic.play();
         } catch (Exception e) { battleMusic = null; }
 
-        try {
-            swordSwingSound = Gdx.audio.newSound(Gdx.files.internal("sounds/sword_swing.wav"));
-        } catch (Exception e) { swordSwingSound = null; }
+        try { swordSwingSound = Gdx.audio.newSound(Gdx.files.internal("sounds/sword_swing.wav")); }
+        catch (Exception e) { swordSwingSound = null; }
+        try { swordHitSound = Gdx.audio.newSound(Gdx.files.internal("sounds/sword_hit.wav")); }
+        catch (Exception e) { swordHitSound = null; }
+        try { enemyDeathSound = Gdx.audio.newSound(Gdx.files.internal("sounds/enemy_die.wav")); }
+        catch (Exception e) { enemyDeathSound = null; }
+        try { fireSound = Gdx.audio.newSound(Gdx.files.internal("sounds/fire_spell.wav")); }
+        catch (Exception e) { fireSound = null; }
 
-        try {
-            swordHitSound = Gdx.audio.newSound(Gdx.files.internal("sounds/sword_hit.wav"));
-        } catch (Exception e) { swordHitSound = null; }
+        try { goblinTex = new Texture(Gdx.files.internal("goblin.png")); }
+        catch (Exception e) { goblinTex = null; }
+        try { whitewalkerTex = new Texture(Gdx.files.internal("whitewalker.png")); }
+        catch (Exception e) { whitewalkerTex = null; }
+        try { archerTex = new Texture(Gdx.files.internal("archer.png")); }
+        catch (Exception e) { archerTex = null; }
+        try { mageTex = new Texture(Gdx.files.internal("mage.png")); }
+        catch (Exception e) { mageTex = null; }
 
-        try {
-            enemyDeathSound = Gdx.audio.newSound(Gdx.files.internal("sounds/enemy_die.wav"));
-        } catch (Exception e) { enemyDeathSound = null; }
-
-        try {
-            fireSound = Gdx.audio.newSound(Gdx.files.internal("sounds/fire_spell.wav"));
-        } catch (Exception e) { fireSound = null; }
-
-        try {
-            String heroType = state.getSelectedHeroType();
-            if ("MAGE".equals(heroType)) {
-                heroTex = new Texture(Gdx.files.internal("mage.png"));
-            } else if ("ARCHER".equals(heroType)) {
-                heroTex = new Texture(Gdx.files.internal("archer.png"));
-            } else {
-                heroTex = new Texture(Gdx.files.internal("knight.png"));
-            }
-        } catch (Exception e) { heroTex = null; }
-
-        try {
-            goblinTex = new Texture(Gdx.files.internal("goblin.png"));
-        } catch (Exception e) { goblinTex = null; }
-
-        try {
-            whitewalkerTex = new Texture(Gdx.files.internal("whitewalker.png"));
-        } catch (Exception e) { whitewalkerTex = null; }
+        // Knight animator
+        if ("KNIGHT".equals(state.getSelectedHeroType())) {
+            knightAnimator = new KnightAnimator();
+        }
     }
 
     private void setupLevel() {
@@ -181,16 +237,13 @@ public class GameScreen implements Screen {
 
         EnemyPrototypeRegistry registry = EnemyPrototypeRegistry.getInstance();
         for (String enemyType : currentLevel.enemies) {
-            try {
-                enemies.add(registry.spawn(enemyType));
-            } catch (Exception e) {
-                enemies.add(registry.spawn("GOBLIN"));
-            }
+            try { enemies.add(registry.spawn(enemyType)); }
+            catch (Exception e) { enemies.add(registry.spawn("GOBLIN")); }
         }
 
         float[] xs = {760, 930, 840, 1040, 1120, 1210};
         for (int i = 0; i < enemies.size(); i++) {
-            enemies.get(i).setPosition(xs[Math.min(i, xs.length - 1)], GROUND);
+            enemies.get(i).setPosition(xs[Math.min(i, xs.length-1)], GROUND);
             enemies.get(i).setTarget(hero);
         }
 
@@ -203,26 +256,25 @@ public class GameScreen implements Screen {
 
         BattleConfig config = new BattleConfigBuilder()
             .setBattleName("Level " + state.getLevel() + ": " + currentLevel.title)
-            .setHero(hero)
-            .setWaveCount(state.getLevel())
-            .build();
+            .setHero(hero).setWaveCount(state.getLevel()).build();
         facade.setupBattle(config);
 
         msg("LEVEL " + state.getLevel() + " — " + currentLevel.title, Color.GOLD);
     }
 
+    // ═══════════════════════════════════════
+    // RENDER
+    // ═══════════════════════════════════════
     @Override
     public void render(float delta) {
         time += delta;
-
-        Gdx.gl.glClearColor(1, 1, 1, 1);
+        Gdx.gl.glClearColor(0.01f, 0.005f, 0.012f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
         update(delta);
-
         drawBattleBackground();
-
-//        drawScene();
+        updateSnowfield(delta);
+        renderSnowfield(sr);
         drawCharacters();
 
         game.batch.begin();
@@ -233,10 +285,12 @@ public class GameScreen implements Screen {
 
         drawHPBars();
         drawTarget();
-
         checkLevelEnd(delta);
     }
 
+    // ═══════════════════════════════════════
+    // UPDATE
+    // ═══════════════════════════════════════
     private void update(float delta) {
         updateHeroMovement(delta);
         updateEnemies(delta);
@@ -253,20 +307,13 @@ public class GameScreen implements Screen {
             heroVy = JUMP_FORCE;
             isGrounded = false;
         }
-
         if (!isGrounded) heroVy += GRAVITY * delta;
 
         float nextX = hero.getX() + heroVx * delta;
         float nextY = hero.getY() + heroVy * delta;
-
         if (nextX < 0) nextX = 0;
         if (nextX > 1220) nextX = 1220;
-
-        if (nextY <= GROUND) {
-            nextY = GROUND;
-            heroVy = 0f;
-            isGrounded = true;
-        }
+        if (nextY <= GROUND) { nextY = GROUND; heroVy = 0f; isGrounded = true; }
 
         hero.setPosition(nextX, nextY);
         hero.update(delta);
@@ -278,16 +325,13 @@ public class GameScreen implements Screen {
             if (!enemy.isAlive()) continue;
             float diffX = hero.getX() - enemy.getX();
             if (Math.abs(diffX) > 48f) {
-                float dir = Math.signum(diffX);
                 enemy.setPosition(
-                    enemy.getX() + dir * ENEMY_SPEED * speedBonus * delta,
-                    enemy.getY()
-                );
+                    enemy.getX() + Math.signum(diffX) * ENEMY_SPEED * speedBonus * delta,
+                    enemy.getY());
             } else {
                 if (!shieldActive) {
                     facade.enemyAttacks(enemy, hero);
-                    heroHit = true;
-                    heroHitTimer = 0.15f;
+                    heroHit = true; heroHitTimer = 0.15f;
                 }
             }
             enemy.update(delta);
@@ -299,161 +343,112 @@ public class GameScreen implements Screen {
         if (abilityCD > 0) abilityCD -= delta;
         if (shieldCD > 0) shieldCD -= delta;
         if (msgTimer > 0) msgTimer -= delta;
-
-        if (shieldActive) {
-            shieldTimer -= delta;
-            if (shieldTimer <= 0) shieldActive = false;
-        }
-
-        if (heroHitTimer > 0) {
-            heroHitTimer -= delta;
-            heroHit = heroHitTimer > 0;
-        }
+        if (shieldActive) { shieldTimer -= delta; if (shieldTimer <= 0) shieldActive = false; }
+        if (heroHitTimer > 0) { heroHitTimer -= delta; heroHit = heroHitTimer > 0; }
 
         for (int i = 0; i < enemyHitTimer.length; i++) {
-            if (enemyHitTimer[i] > 0) {
-                enemyHitTimer[i] -= delta;
-                enemyHit[i] = enemyHitTimer[i] > 0;
+            if (enemyHitTimer[i] > 0) { enemyHitTimer[i] -= delta; enemyHit[i] = enemyHitTimer[i] > 0; }
+        }
+        for (int i = 0; i < enemyShakeTimer.length; i++) if (enemyShakeTimer[i] > 0) enemyShakeTimer[i] -= delta;
+        for (int i = 0; i < enemyDeathTimer.length; i++) if (enemyDeathTimer[i] > 0) enemyDeathTimer[i] -= delta;
+
+        if (attackAnimTimer > 0) { attackAnimTimer -= delta; if (attackAnimTimer <= 0) isAttacking = false; }
+        if (heroVx != 0) heroRunCycle += delta * 8f; else heroRunCycle = 0f;
+
+        // Knight animator жаңарту
+        if (knightAnimator != null) {
+            knightAnimator.update(delta);
+            if (!hero.isAlive()) {
+                knightAnimator.setState(KnightAnimator.State.DEAD);
+            } else if (heroHit) {
+                knightAnimator.setState(KnightAnimator.State.HURT);
+            } else if (isAttacking) {
+                knightAnimator.setState(KnightAnimator.State.ATTACK);
+            } else if (!isGrounded) {
+                knightAnimator.setState(KnightAnimator.State.JUMP);
+            } else if (heroVx != 0) {
+                knightAnimator.setState(KnightAnimator.State.RUN);
+            } else {
+                knightAnimator.setState(KnightAnimator.State.IDLE);
             }
-        }
-
-        // Шабуыл анимация таймері
-        if (attackAnimTimer > 0) {
-            attackAnimTimer -= delta;
-            if (attackAnimTimer <= 0) isAttacking = false;
-        }
-
-        // Жүгіру циклі
-        if (heroVx != 0) heroRunCycle += delta * 8f;
-        else heroRunCycle = 0f;
-
-        // Жау шайқалу таймері
-        for (int i = 0; i < enemyShakeTimer.length; i++) {
-            if (enemyShakeTimer[i] > 0) enemyShakeTimer[i] -= delta;
-        }
-
-        // Жау өлу таймері
-        for (int i = 0; i < enemyDeathTimer.length; i++) {
-            if (enemyDeathTimer[i] > 0) enemyDeathTimer[i] -= delta;
+            if (knightAnimator.isAttackDone()) isAttacking = false;
         }
     }
 
     private void handleInput() {
-        if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE) || Gdx.input.justTouched()) {
-            normalAttack();
-        }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE) || Gdx.input.justTouched()) normalAttack();
         if (Gdx.input.isKeyJustPressed(Input.Keys.S)) activateShield();
         if (Gdx.input.isKeyJustPressed(Input.Keys.E)) useSpecialAbility();
-
         if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_1)) selectTarget(0);
         if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_2)) selectTarget(1);
         if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_3)) selectTarget(2);
         if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_4)) selectTarget(3);
         if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_5)) selectTarget(4);
-
         if (Gdx.input.isKeyJustPressed(Input.Keys.TAB)) {
             nextTarget();
             Enemy t = getTarget();
             if (t != null) msg("Target: " + t.getName(), Color.YELLOW);
         }
-
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
             stopMusic();
             game.setScreen(new MainMenuScreen(game));
         }
     }
 
+    // ═══════════════════════════════════════
+    // COMBAT
+    // ═══════════════════════════════════════
     private void normalAttack() {
         if (attackCD > 0) return;
         Enemy target = getTarget();
         if (target == null) return;
-
-        float distance = Math.abs(hero.getX() - target.getX());
-        if (distance > 120f) {
-            msg("Too far! Run closer!", Color.LIGHT_GRAY);
-            return;
+        if (Math.abs(hero.getX() - target.getX()) > 120f) {
+            msg("Too far! Run closer!", Color.LIGHT_GRAY); return;
         }
-
         int index = enemies.indexOf(target);
         if (swordSwingSound != null) swordSwingSound.play(0.6f);
-
         float damage = hero.getAttack() * getWeaponBonus();
         target.takeDamage(damage);
-
         if (swordHitSound != null) swordHitSound.play(0.7f);
-
         rewardIfDead(target);
         attackCD = ATTACK_CD;
-
-        // Шабуыл анимациясы
         isAttacking = true;
         attackAnimTimer = 0.3f;
-
-        if (index >= 0 && index < enemyHit.length) {
-            enemyHit[index] = true;
-            enemyHitTimer[index] = 0.15f;
-        }
-
-        if (index >= 0 && index < enemyShakeTimer.length) {
-            enemyShakeTimer[index] = 0.2f;
-        }
-
-        msg(getWeaponName() + " strike: -" + (int) damage + " DMG", Color.WHITE);
+        if (index >= 0 && index < enemyHit.length) { enemyHit[index] = true; enemyHitTimer[index] = 0.15f; }
+        if (index >= 0 && index < enemyShakeTimer.length) enemyShakeTimer[index] = 0.2f;
+        msg(getWeaponName() + " strike: -" + (int)damage + " DMG", Color.WHITE);
     }
 
     private void activateShield() {
-        if (shieldCD > 0) {
-            msg("Shield cooldown: " + (int) shieldCD + "s", Color.GRAY);
-            return;
-        }
-        shieldActive = true;
-        shieldTimer = 2f;
-        shieldCD = SHIELD_CD;
+        if (shieldCD > 0) { msg("Shield cooldown: " + (int)shieldCD + "s", Color.GRAY); return; }
+        shieldActive = true; shieldTimer = 2f; shieldCD = SHIELD_CD;
         msg("[S] Defensive shield active!", Color.CYAN);
     }
 
     private void useSpecialAbility() {
-        if (abilityCD > 0) {
-            msg("Ability cooldown: " + (int) abilityCD + "s", Color.GRAY);
-            return;
-        }
+        if (abilityCD > 0) { msg("Ability cooldown: " + (int)abilityCD + "s", Color.GRAY); return; }
         Enemy target = getTarget();
         if (target == null) return;
-
-        float weaponBonus = getWeaponBonus();
-
+        float wb = getWeaponBonus();
         if (hero.getType().equals("KNIGHT")) {
-            float damage = hero.getAttack() * weaponBonus * 1.8f;
-            target.takeDamage(damage);
-            shieldActive = true;
-            shieldTimer = 1.2f;
-            msg("[E] Dragon Blood Slash! -" + (int) damage + " DMG", Color.ORANGE);
+            float dmg = hero.getAttack() * wb * 1.8f;
+            target.takeDamage(dmg);
+            shieldActive = true; shieldTimer = 1.2f;
+            msg("[E] Dragon Blood Slash! -" + (int)dmg + " DMG", Color.ORANGE);
         } else if (hero.getType().equals("MAGE")) {
-            float damage = hero.getAttack() * weaponBonus * 2.4f;
-            target.takeDamage(damage);
-            msg("[E] Golden Fire Nova! -" + (int) damage + " DMG", Color.GOLD);
+            float dmg = hero.getAttack() * wb * 2.4f;
+            target.takeDamage(dmg);
+            msg("[E] Golden Fire Nova! -" + (int)dmg + " DMG", Color.GOLD);
         } else {
-            float damage = hero.getAttack() * weaponBonus * 1.6f;
-            for (Enemy enemy : enemies) {
-                if (enemy.isAlive() && Math.abs(enemy.getX() - target.getX()) < 180f) {
-                    enemy.takeDamage(damage);
-                    rewardIfDead(enemy);
-                }
-            }
+            float dmg = hero.getAttack() * wb * 1.6f;
+            for (Enemy e : enemies)
+                if (e.isAlive() && Math.abs(e.getX() - target.getX()) < 180f) { e.takeDamage(dmg); rewardIfDead(e); }
             msg("[E] Hunter's Rain! Area damage.", Color.GREEN);
         }
-
         if (fireSound != null) fireSound.play(0.75f);
-
-        int index = enemies.indexOf(target);
-        if (index >= 0 && index < enemyHit.length) {
-            enemyHit[index] = true;
-            enemyHitTimer[index] = 0.2f;
-        }
-        if (index >= 0 && index < enemyShakeTimer.length) {
-            enemyShakeTimer[index] = 0.25f;
-        }
-
+        int idx = enemies.indexOf(target);
+        if (idx >= 0 && idx < enemyHit.length) { enemyHit[idx] = true; enemyHitTimer[idx] = 0.2f; }
+        if (idx >= 0 && idx < enemyShakeTimer.length) enemyShakeTimer[idx] = 0.25f;
         rewardIfDead(target);
         abilityCD = ABILITY_CD;
     }
@@ -464,153 +459,68 @@ public class GameScreen implements Screen {
             state.addGold(enemy.getGoldReward());
             state.addScore(enemy.getExpReward() * 10);
             int idx = enemies.indexOf(enemy);
-            if (idx >= 0 && idx < enemyDying.length) {
-                enemyDying[idx] = true;
-                enemyDeathTimer[idx] = 0.5f;
-            }
+            if (idx >= 0 && idx < enemyDying.length) { enemyDying[idx] = true; enemyDeathTimer[idx] = 0.5f; }
         }
     }
 
     private float getWeaponBonus() { return 1f + state.getLevel() * 0.12f; }
 
     private String getWeaponName() {
-        int level = state.getLevel();
-        if (level <= 2) return "Iron Sword";
-        if (level <= 4) return "Steel Sword";
-        if (level <= 6) return "Royal Blade";
-        if (level <= 8) return "Dragon Blade";
+        int lv = state.getLevel();
+        if (lv <= 2) return "Iron Sword";
+        if (lv <= 4) return "Steel Sword";
+        if (lv <= 6) return "Royal Blade";
+        if (lv <= 8) return "Dragon Blade";
         return "Thronebreaker";
     }
 
+    // ═══════════════════════════════════════
+    // DRAW
+    // ═══════════════════════════════════════
     private void drawBattleBackground() {
-
         game.batch.begin();
-
         if (battleBackground != null) {
-
             game.batch.setColor(1f, 1f, 1f, 1f);
-
-            game.batch.draw(
-                battleBackground,
-                0,
-                0,
-                1280,
-                720
-            );
+            game.batch.draw(battleBackground, 0, 0, 1280, 720);
         }
-
         game.batch.end();
-    }
-
-    private void drawScene() {
-        sr.begin(ShapeRenderer.ShapeType.Filled);
-
-        // Тек төменгі жер ғана салынады
-        sr.setColor(0.10f, 0.065f, 0.035f, 1f);
-        sr.rect(0, 0, 1280, GROUND);
-
-        sr.setColor(0.32f, 0.23f, 0.12f, 1f);
-        sr.rect(0, GROUND - 4, 1280, 8);
-
-        // Castle blocks керек болмаса, төмендегі блоктарды өшіріп тастауға болады
-        sr.setColor(0.045f, 0.035f, 0.07f, 1f);
-        sr.rect(75, GROUND, 80, 190);
-        sr.rect(155, GROUND, 120, 120);
-        sr.rect(225, GROUND, 60, 160);
-        sr.rect(910, GROUND, 85, 175);
-        sr.rect(995, GROUND, 120, 115);
-        sr.rect(1065, GROUND, 55, 145);
-
-        sr.end();
     }
 
     private void drawCharacters() {
         game.batch.begin();
 
-        // ── ГЕРОЙ АНИМАЦИЯСЫ ──
-        float bobY = 0f;
-        float tiltAngle = 0f;
-        float scaleW = 1f;
-        float scaleH = 1f;
-        float attackOffsetX = 0f;
-        float attackOffsetY = 0f;
-        float breathe = (float)(Math.sin(time * 1.5f) * 2f);
-
-        // Жүгіру
-        if (heroVx != 0 && isGrounded) {
-            bobY = (float)(Math.sin(heroRunCycle) * 6f);
-            tiltAngle = heroVx > 0 ? -12f : 12f;
-            scaleH = 1f + (float)(Math.sin(heroRunCycle * 2f) * 0.06f);
-            scaleW = 1f - (float)(Math.sin(heroRunCycle * 2f) * 0.04f);
-        }
-
-        // Шабуыл
-        if (isAttacking) {
-            float progress = 1f - (attackAnimTimer / 0.3f);
-            attackOffsetX = (float)(Math.sin(progress * Math.PI)) * 30f;
-            attackOffsetY = (float)(Math.sin(progress * Math.PI)) * 10f;
-            tiltAngle = (float)(Math.sin(progress * Math.PI)) * -25f;
-            scaleH = 1f + (float)(Math.sin(progress * Math.PI)) * 0.1f;
-        }
-
-        // Секіру
-        if (!isGrounded) {
-            scaleH = heroVy > 0 ? 1.15f : 0.9f;
-            scaleW = heroVy > 0 ? 0.9f : 1.1f;
-            tiltAngle = heroVy > 0 ? -5f : 5f;
-        }
-
-        float drawX = hero.getX() - 10 + attackOffsetX;
-        float drawY = hero.getY() + bobY + attackOffsetY + breathe;
-
-        if (heroTex != null) {
-            if (heroHit) {
-                float flicker = (float)(Math.sin(time * 30f) * 0.5f + 0.5f);
-                game.batch.setColor(1f, flicker * 0.4f, flicker * 0.4f, 1f);
-            } else {
+        // ── KNIGHT АНИМАЦИЯСЫ ──
+        if (hero.getType().equals("KNIGHT") && knightAnimator != null) {
+            Texture frame = knightAnimator.getFrame();
+            if (frame != null) {
+                if (heroHit) {
+                    float flicker = (float)(Math.sin(time * 30f) * 0.5f + 0.5f);
+                    game.batch.setColor(1f, flicker * 0.4f, flicker * 0.4f, 1f);
+                } else {
+                    game.batch.setColor(Color.WHITE);
+                }
+                game.batch.draw(frame, hero.getX() - 20, hero.getY(), 130, 170);
                 game.batch.setColor(Color.WHITE);
             }
 
-            game.batch.draw(
-                heroTex,
-                drawX, drawY,
-                40f, 0f,
-                80f * scaleW, 140f * scaleH,
-                1f, 1f,
-                tiltAngle,
-                0, 0,
-                heroTex.getWidth(), heroTex.getHeight(),
-                false, false
-            );
-            game.batch.setColor(Color.WHITE);
+            // ── MAGE / ARCHER ──
         } else {
-            game.batch.end();
-            if (hero.getType().equals("MAGE")) {
-                CharacterRenderer.drawMage(sr, drawX, drawY, 1f, time, heroHit);
-            } else if (hero.getType().equals("ARCHER")) {
-                CharacterRenderer.drawArcher(sr, drawX, drawY, 1f, time, heroHit);
-            } else {
-                CharacterRenderer.drawKnight(sr, drawX, drawY, 1f, time, heroHit);
+            Texture tex = hero.getType().equals("MAGE") ? mageTex : archerTex;
+            if (tex != null) {
+                float bobY = heroVx != 0 ? (float)(Math.sin(heroRunCycle) * 5f) : 0f;
+                float attackOffX = 0f;
+                if (isAttacking) {
+                    float p = 1f - (attackAnimTimer / 0.3f);
+                    attackOffX = (float)(Math.sin(p * Math.PI)) * 25f;
+                }
+                if (heroHit) game.batch.setColor(1f, 0.3f, 0.3f, 1f);
+                else game.batch.setColor(Color.WHITE);
+                game.batch.draw(tex, hero.getX() - 10 + attackOffX, hero.getY() + bobY, 90, 150);
+                game.batch.setColor(Color.WHITE);
             }
-            game.batch.begin();
         }
 
-        // Шабуыл кезінде қылыш жарқылы
-        if (isAttacking) {
-            game.batch.end();
-            float progress = 1f - (attackAnimTimer / 0.3f);
-            float alpha = (float)(Math.sin(progress * Math.PI));
-            sr.begin(ShapeRenderer.ShapeType.Filled);
-            sr.setColor(1f, 0.9f, 0.3f, alpha * 0.8f);
-            float sx = drawX + 80f + 10;
-            float sy = drawY + 70f;
-            sr.rectLine(sx, sy, sx + 55f * alpha, sy - 25f * alpha, 5f);
-            sr.rectLine(sx, sy, sx + 45f * alpha, sy + 15f * alpha, 3f);
-            sr.end();
-            game.batch.begin();
-        }
-
-        // ── ЖАУЛАР АНИМАЦИЯСЫ ──
+        // ── ЖАУЛАР ──
         for (int i = 0; i < enemies.size(); i++) {
             Enemy enemy = enemies.get(i);
 
@@ -618,13 +528,14 @@ public class GameScreen implements Screen {
             if (!enemy.isAlive()) {
                 if (i < enemyDying.length && enemyDying[i] && enemyDeathTimer[i] > 0) {
                     float progress = 1f - (enemyDeathTimer[i] / 0.5f);
-                    float fallY = enemy.getY() - progress * 30f;
                     float alpha = enemyDeathTimer[i] / 0.5f;
                     Texture dTex = enemy.getType().equals("GOBLIN") ? goblinTex : whitewalkerTex;
                     if (dTex != null) {
-                        game.batch.setColor(1f, 1f, 1f, alpha);
-                        game.batch.draw(dTex, enemy.getX() - 5, fallY,
-                            70, 110 * (1f - progress * 0.3f));
+                        game.batch.setColor(1f, 0.3f, 0.3f, alpha);
+                        game.batch.draw(dTex,
+                            enemy.getX() - 5,
+                            enemy.getY() - progress * 40f,
+                            70, 110 * (1f - progress * 0.5f));
                         game.batch.setColor(Color.WHITE);
                     }
                 }
@@ -632,68 +543,35 @@ public class GameScreen implements Screen {
             }
 
             boolean hit = i < enemyHit.length && enemyHit[i];
-
-            // Шайқалу анимациясы
             float shakeX = 0f;
-            if (i < enemyShakeTimer.length && enemyShakeTimer[i] > 0) {
+            if (i < enemyShakeTimer.length && enemyShakeTimer[i] > 0)
                 shakeX = (float)(Math.sin(enemyShakeTimer[i] * 40f) * 6f);
-            }
-
-            // Жүру боб
             float enemyBob = (float)(Math.sin(time * 4f + i) * 3f);
 
-            // Жау да алға еңкейеді (жүру иллюзиясы)
-            float enemyTilt = -8f;
-
-            Texture enemyTex = null;
-            float w = 70, h = 110;
-
+            Texture enemyTex;
+            float w, h;
             switch (enemy.getType()) {
-                case "GOBLIN":
-                    enemyTex = goblinTex; w = 60; h = 95; break;
-                case "DARK_KNIGHT": case "NECROMANCER": case "ORC":
-                    enemyTex = whitewalkerTex; w = 75; h = 120; break;
-                case "DRAGON":
-                    enemyTex = whitewalkerTex; w = 110; h = 130; break;
-                default:
-                    enemyTex = goblinTex; break;
+                case "GOBLIN":      enemyTex = goblinTex;      w = 60; h = 95;  break;
+                case "DRAGON":      enemyTex = whitewalkerTex; w = 110; h = 130; break;
+                default:            enemyTex = whitewalkerTex; w = 75; h = 120; break;
             }
 
             if (enemyTex != null) {
                 if (hit) game.batch.setColor(1f, 0.3f, 0.3f, 1f);
                 else game.batch.setColor(Color.WHITE);
-
-                game.batch.draw(
-                    enemyTex,
+                game.batch.draw(enemyTex,
                     enemy.getX() - 5 + shakeX,
                     enemy.getY() + enemyBob,
-                    w / 2, 0f,
-                    w, h,
-                    1f, 1f,
-                    enemyTilt,
-                    0, 0,
-                    enemyTex.getWidth(), enemyTex.getHeight(),
-                    false, false
-                );
+                    w, h);
                 game.batch.setColor(Color.WHITE);
             } else {
                 game.batch.end();
                 switch (enemy.getType()) {
-                    case "GOBLIN":
-                        CharacterRenderer.drawGoblin(sr, enemy.getX() + shakeX,
-                            enemy.getY(), 0.9f, time, hit); break;
-                    case "ORC":
-                        CharacterRenderer.drawOrc(sr, enemy.getX() + shakeX,
-                            enemy.getY(), 0.85f, time, hit); break;
-                    case "DARK_KNIGHT":
-                        CharacterRenderer.drawDarkKnight(sr, enemy.getX() + shakeX,
-                            enemy.getY(), 0.95f, time, hit); break;
-                    case "NECROMANCER":
-                        CharacterRenderer.drawNecromancer(sr, enemy.getX() + shakeX,
-                            enemy.getY(), 0.9f, time, hit); break;
-                    case "DRAGON":
-                        CharacterRenderer.drawDragon(sr, enemy.getX() - 20 + shakeX,
-                            enemy.getY(), 0.8f, time, hit); break;
+                    case "GOBLIN": CharacterRenderer.drawGoblin(sr, enemy.getX()+shakeX, enemy.getY(), 0.9f, time, hit); break;
+                    case "ORC": CharacterRenderer.drawOrc(sr, enemy.getX()+shakeX, enemy.getY(), 0.85f, time, hit); break;
+                    case "DARK_KNIGHT": CharacterRenderer.drawDarkKnight(sr, enemy.getX()+shakeX, enemy.getY(), 0.95f, time, hit); break;
+                    case "NECROMANCER": CharacterRenderer.drawNecromancer(sr, enemy.getX()+shakeX, enemy.getY(), 0.9f, time, hit); break;
+                    case "DRAGON": CharacterRenderer.drawDragon(sr, enemy.getX()-20+shakeX, enemy.getY(), 0.8f, time, hit); break;
                 }
                 game.batch.begin();
             }
@@ -706,7 +584,7 @@ public class GameScreen implements Screen {
             sr.begin(ShapeRenderer.ShapeType.Line);
             float pulse = (float)(Math.sin(time * 10f) * 0.5f + 0.5f);
             sr.setColor(0f, pulse, pulse, 1f);
-            sr.circle(hero.getX() + 24, hero.getY() + 36, 40, 20);
+            sr.circle(hero.getX() + 40, hero.getY() + 60, 55, 20);
             sr.end();
         }
     }
@@ -732,26 +610,18 @@ public class GameScreen implements Screen {
         font.setColor(Color.ORANGE);
         font.draw(game.batch, "Weapon: " + getWeaponName() + " x" +
             String.format("%.2f", getWeaponBonus()), 20, 557);
-
         float hpPct = hero.getHp() / hero.getMaxHp();
         font.setColor(hpPct > 0.5f ? Color.GREEN : hpPct > 0.25f ? Color.ORANGE : Color.RED);
         font.draw(game.batch, "HP: " + (int)hero.getHp() + "/" + (int)hero.getMaxHp(), 20, 534);
-
-        if (shieldActive) {
-            font.setColor(Color.CYAN);
-            font.draw(game.batch, "SHIELD ACTIVE!", 20, 511);
-        }
+        if (shieldActive) { font.setColor(Color.CYAN); font.draw(game.batch, "SHIELD ACTIVE!", 20, 511); }
 
         font.setColor(Color.LIGHT_GRAY);
         font.draw(game.batch, "ENEMY REALM:", 1030, 695);
         for (int i = 0; i < enemies.size(); i++) {
-            Enemy enemy = enemies.get(i);
-            font.setColor(i == targetIndex && enemy.isAlive() ? Color.YELLOW :
-                enemy.isAlive() ? Color.WHITE : Color.DARK_GRAY);
-            font.draw(game.batch,
-                (i+1) + ". " + enemy.getName() +
-                    (enemy.isAlive() ? " HP: " + (int)enemy.getHp() : " [DEAD]"),
-                1030, 672 - i * 22);
+            Enemy e = enemies.get(i);
+            font.setColor(i == targetIndex && e.isAlive() ? Color.YELLOW : e.isAlive() ? Color.WHITE : Color.DARK_GRAY);
+            font.draw(game.batch, (i+1) + ". " + e.getName() +
+                (e.isAlive() ? " HP: " + (int)e.getHp() : " [DEAD]"), 1030, 672 - i * 22);
         }
         font.getData().setScale(1f);
     }
@@ -759,30 +629,20 @@ public class GameScreen implements Screen {
     private void drawControls() {
         font.getData().setScale(0.82f);
         int y = 155, s = 20;
-
         font.setColor(Color.WHITE);
         font.draw(game.batch, "[A] Run Left  |  [D] Run Right  |  [W] Jump", 20, y);
         font.setColor(attackCD > 0 ? Color.GRAY : Color.GREEN);
-        font.draw(game.batch, "[SPACE] Sword Attack" +
-            (attackCD > 0 ? " (Cooling)" : " [READY]"), 20, y - s);
-
-        cd("[S]", "Defensive Shield", shieldCD, Color.CYAN, y - s * 2);
-        cd("[E]", "House Special Ability", abilityCD, Color.ORANGE, y - s * 3);
-
+        font.draw(game.batch, "[SPACE] Sword Attack" + (attackCD > 0 ? " (Cooling)" : " [READY]"), 20, y-s);
+        cd("[S]", "Defensive Shield", shieldCD, Color.CYAN, y-s*2);
+        cd("[E]", "House Special Ability", abilityCD, Color.ORANGE, y-s*3);
         font.setColor(Color.DARK_GRAY);
-        font.draw(game.batch, "[1-5] Target  |  [TAB] Next  |  [ESC] Menu",
-            20, y - s * 4 - 4);
+        font.draw(game.batch, "[1-5] Target  |  [TAB] Next  |  [ESC] Menu", 20, y-s*4-4);
         font.getData().setScale(1f);
     }
 
     private void cd(String key, String name, float cd, Color color, float y) {
-        if (cd > 0) {
-            font.setColor(Color.GRAY);
-            font.draw(game.batch, key + " " + name + " (" + (int)cd + "s)", 20, y);
-        } else {
-            font.setColor(color);
-            font.draw(game.batch, key + " " + name + " [READY]", 20, y);
-        }
+        if (cd > 0) { font.setColor(Color.GRAY); font.draw(game.batch, key+" "+name+" ("+(int)cd+"s)", 20, y); }
+        else { font.setColor(color); font.draw(game.batch, key+" "+name+" [READY]", 20, y); }
     }
 
     private void drawMessage() {
@@ -795,64 +655,53 @@ public class GameScreen implements Screen {
 
     private void drawHPBars() {
         sr.begin(ShapeRenderer.ShapeType.Filled);
-
         float hp = hero.getHp() / hero.getMaxHp();
         sr.setColor(0.15f, 0.15f, 0.15f, 1f);
-        sr.rect(hero.getX(), hero.getY() + 80, 80, 10);
+        sr.rect(hero.getX(), hero.getY() + 175, 130, 10);
         sr.setColor(hp > 0.5f ? Color.GREEN : hp > 0.25f ? Color.ORANGE : Color.RED);
-        sr.rect(hero.getX(), hero.getY() + 80, 80 * hp, 10);
+        sr.rect(hero.getX(), hero.getY() + 175, 130 * hp, 10);
 
         for (Enemy enemy : enemies) {
             if (!enemy.isAlive()) continue;
             float ep = enemy.getHp() / enemy.getMaxHp();
             sr.setColor(0.15f, 0.15f, 0.15f, 1f);
-            sr.rect(enemy.getX(), enemy.getY() + 78, 64, 8);
+            sr.rect(enemy.getX(), enemy.getY() + 125, 75, 8);
             sr.setColor(Color.RED);
-            sr.rect(enemy.getX(), enemy.getY() + 78, 64 * ep, 8);
+            sr.rect(enemy.getX(), enemy.getY() + 125, 75 * ep, 8);
         }
         sr.end();
     }
 
     private void drawTarget() {
         if (targetIndex < enemies.size() && enemies.get(targetIndex).isAlive()) {
-            Enemy target = enemies.get(targetIndex);
+            Enemy t = enemies.get(targetIndex);
             float pulse = (float)(Math.sin(time * 4f) * 0.4f + 0.6f);
             sr.begin(ShapeRenderer.ShapeType.Line);
             sr.setColor(pulse, pulse * 0.8f, 0f, 1f);
-            sr.rect(target.getX() - 4, target.getY() - 4, 72, 90);
-            sr.triangle(target.getX() + 28, target.getY() + 95,
-                target.getX() + 36, target.getY() + 110,
-                target.getX() + 44, target.getY() + 95);
+            sr.rect(t.getX() - 4, t.getY() - 4, 80, 130);
+            sr.triangle(t.getX()+32, t.getY()+135, t.getX()+40, t.getY()+150, t.getX()+48, t.getY()+135);
             sr.end();
         }
     }
 
+    // ═══════════════════════════════════════
+    // LEVEL END
+    // ═══════════════════════════════════════
     private void checkLevelEnd(float delta) {
         if (screenChanging) return;
         levelStartTimer += delta;
         if (levelStartTimer <= 1.5f) return;
-
         if (facade.isBattleOver(hero, enemies)) {
-            screenChanging = true;
-            stopMusic();
-            if (state.isGameOver() || !hero.isAlive()) {
-                game.setScreen(new GameOverScreen(game));
-                return;
-            }
-            if (state.getLevel() >= 9) {
-                state.setVictory(true);
-                game.setScreen(new VictoryScreen(game));
-            } else {
-                state.nextLevel();
-                game.setScreen(new GameScreen(game));
-            }
+            screenChanging = true; stopMusic();
+            if (state.isGameOver() || !hero.isAlive()) { game.setScreen(new GameOverScreen(game)); return; }
+            if (state.getLevel() >= 9) { state.setVictory(true); game.setScreen(new VictoryScreen(game)); }
+            else { state.nextLevel(); game.setScreen(new GameScreen(game)); }
         }
     }
 
     private void selectTarget(int index) {
         if (index < enemies.size() && enemies.get(index).isAlive()) {
-            targetIndex = index;
-            msg("Target: " + enemies.get(index).getName(), Color.YELLOW);
+            targetIndex = index; msg("Target: " + enemies.get(index).getName(), Color.YELLOW);
         }
     }
 
@@ -866,26 +715,18 @@ public class GameScreen implements Screen {
     private Enemy getTarget() {
         if (targetIndex < enemies.size() && enemies.get(targetIndex).isAlive())
             return enemies.get(targetIndex);
-        for (int i = 0; i < enemies.size(); i++) {
+        for (int i = 0; i < enemies.size(); i++)
             if (enemies.get(i).isAlive()) { targetIndex = i; return enemies.get(i); }
-        }
         return null;
     }
 
-    private void msg(String text, Color color) {
-        message = text; msgTimer = 2.5f; msgColor = color;
-    }
-
-    private void stopMusic() {
-        if (battleMusic != null) battleMusic.stop();
-    }
+    private void msg(String text, Color color) { message = text; msgTimer = 2.5f; msgColor = color; }
+    private void stopMusic() { if (battleMusic != null) battleMusic.stop(); }
 
     @Override public void resize(int w, int h) {}
     @Override public void pause() {}
     @Override public void resume() {}
-
-    @Override
-    public void hide() { stopMusic(); }
+    @Override public void hide() { stopMusic(); }
 
     @Override
     public void dispose() {
@@ -897,56 +738,32 @@ public class GameScreen implements Screen {
         if (swordHitSound != null) swordHitSound.dispose();
         if (enemyDeathSound != null) enemyDeathSound.dispose();
         if (fireSound != null) fireSound.dispose();
-        if (heroTex != null) heroTex.dispose();
         if (goblinTex != null) goblinTex.dispose();
         if (whitewalkerTex != null) whitewalkerTex.dispose();
+        if (archerTex != null) archerTex.dispose();
+        if (mageTex != null) mageTex.dispose();
+        if (knightAnimator != null) knightAnimator.dispose();
     }
 
     // ═══════════════════════════════════════
     // CAMPAIGN LEVELS
     // ═══════════════════════════════════════
     private static class CampaignLevel {
-        int level;
-        String title, objective, background;
-        String[] enemies;
-
-        CampaignLevel(int level, String title, String objective,
-                      String background, String[] enemies) {
-            this.level = level; this.title = title;
-            this.objective = objective; this.background = background;
-            this.enemies = enemies;
+        int level; String title, objective, background; String[] enemies;
+        CampaignLevel(int l, String t, String o, String b, String[] e) {
+            level=l; title=t; objective=o; background=b; enemies=e;
         }
-
         static CampaignLevel get(int level) {
             switch (level) {
-                case 1: return new CampaignLevel(1, "Border Ambush",
-                    "Defeat the goblin scouts.", "ui/backgrounds/level1.png",
-                    new String[]{"GOBLIN", "GOBLIN"});
-                case 2: return new CampaignLevel(2, "Burned Village",
-                    "Survive the orc ambush.", "ui/backgrounds/level2.png",
-                    new String[]{"GOBLIN", "GOBLIN", "ORC"});
-                case 3: return new CampaignLevel(3, "Castle Gate",
-                    "Break through the first royal guards.", "ui/backgrounds/level3.png",
-                    new String[]{"GOBLIN", "ORC", "DARK_KNIGHT"});
-                case 4: return new CampaignLevel(4, "Hall of Betrayal",
-                    "Kill the knight who betrayed your bloodline.", "ui/backgrounds/level4.png",
-                    new String[]{"ORC", "DARK_KNIGHT", "DARK_KNIGHT"});
-                case 5: return new CampaignLevel(5, "Siege of Ironkeep",
-                    "Defeat the fortress army.", "ui/backgrounds/level5.png",
-                    new String[]{"GOBLIN", "ORC", "ORC", "DARK_KNIGHT"});
-                case 6: return new CampaignLevel(6, "Necromancer Crypt",
-                    "Stop the dead army from rising.", "ui/backgrounds/level6.png",
-                    new String[]{"ORC", "DARK_KNIGHT", "NECROMANCER"});
-                case 7: return new CampaignLevel(7, "Dragon Valley",
-                    "Face the first dragon.", "ui/backgrounds/level7.png",
-                    new String[]{"ORC", "DARK_KNIGHT", "DRAGON"});
-                case 8: return new CampaignLevel(8, "War of Five Houses",
-                    "Survive the united enemy houses.", "ui/backgrounds/level8.png",
-                    new String[]{"GOBLIN", "ORC", "DARK_KNIGHT", "NECROMANCER", "DRAGON"});
-                case 9: default: return new CampaignLevel(9, "The Black Throne",
-                    "Defeat the ancient dragons and claim the throne.",
-                    "ui/backgrounds/level9.png",
-                    new String[]{"DARK_KNIGHT", "NECROMANCER", "DRAGON", "DRAGON"});
+                case 1: return new CampaignLevel(1,"Border Ambush","Defeat the goblin scouts.","ui/backgrounds/level1.png",new String[]{"GOBLIN","GOBLIN"});
+                case 2: return new CampaignLevel(2,"Burned Village","Survive the orc ambush.","ui/backgrounds/level2.png",new String[]{"GOBLIN","GOBLIN","ORC"});
+                case 3: return new CampaignLevel(3,"Castle Gate","Break through the first royal guards.","ui/backgrounds/level3.png",new String[]{"GOBLIN","ORC","DARK_KNIGHT"});
+                case 4: return new CampaignLevel(4,"Hall of Betrayal","Kill the knight who betrayed your bloodline.","ui/backgrounds/level4.png",new String[]{"ORC","DARK_KNIGHT","DARK_KNIGHT"});
+                case 5: return new CampaignLevel(5,"Siege of Ironkeep","Defeat the fortress army.","ui/backgrounds/level5.png",new String[]{"GOBLIN","ORC","ORC","DARK_KNIGHT"});
+                case 6: return new CampaignLevel(6,"Necromancer Crypt","Stop the dead army from rising.","ui/backgrounds/level6.png",new String[]{"ORC","DARK_KNIGHT","NECROMANCER"});
+                case 7: return new CampaignLevel(7,"Dragon Valley","Face the first dragon.","ui/backgrounds/level7.png",new String[]{"ORC","DARK_KNIGHT","DRAGON"});
+                case 8: return new CampaignLevel(8,"War of Five Houses","Survive the united enemy houses.","ui/backgrounds/level8.png",new String[]{"GOBLIN","ORC","DARK_KNIGHT","NECROMANCER","DRAGON"});
+                default: return new CampaignLevel(9,"The Black Throne","Defeat the ancient dragons and claim the throne.","ui/backgrounds/level9.png",new String[]{"DARK_KNIGHT","NECROMANCER","DRAGON","DRAGON"});
             }
         }
     }
@@ -954,10 +771,7 @@ public class GameScreen implements Screen {
     // ═══════════════════════════════════════
     // SNOWFLAKES
     // ═══════════════════════════════════════
-    private static class Snowflake {
-        float x, y, speed, size, alpha;
-        boolean fading;
-    }
+    private static class Snowflake { float x,y,speed,size,alpha; boolean fading; }
 
     private void initSnowfield(int count) {
         snowflakesList = new ArrayList<>();
@@ -966,12 +780,9 @@ public class GameScreen implements Screen {
 
     private Snowflake createSnowflake(boolean randomY) {
         Snowflake s = new Snowflake();
-        s.x = MathUtils.random(0, 1280);
-        s.y = randomY ? MathUtils.random(0, 720) : 720;
-        s.speed = MathUtils.random(150f, 350f);
-        s.size = MathUtils.random(1.5f, 3.5f);
-        s.alpha = MathUtils.random(0.3f, 0.9f);
-        s.fading = MathUtils.randomBoolean();
+        s.x = MathUtils.random(0, 1280); s.y = randomY ? MathUtils.random(0, 720) : 720;
+        s.speed = MathUtils.random(150f, 350f); s.size = MathUtils.random(1.5f, 3.5f);
+        s.alpha = MathUtils.random(0.3f, 0.9f); s.fading = MathUtils.randomBoolean();
         return s;
     }
 
@@ -980,8 +791,7 @@ public class GameScreen implements Screen {
         float mult = 1f + state.getLevel() * 0.15f;
         for (int i = 0; i < snowflakesList.size(); i++) {
             Snowflake s = snowflakesList.get(i);
-            s.y -= s.speed * delta * mult;
-            s.x -= s.speed * 0.3f * delta;
+            s.y -= s.speed * delta * mult; s.x -= s.speed * 0.3f * delta;
             if (s.fading) { s.alpha -= delta * 0.5f; if (s.alpha <= 0.2f) s.fading = false; }
             else { s.alpha += delta * 0.5f; if (s.alpha >= 0.9f) s.fading = true; }
             if (s.y < 0 || s.x < 0) snowflakesList.set(i, createSnowflake(false));
@@ -991,10 +801,7 @@ public class GameScreen implements Screen {
     private void renderSnowfield(ShapeRenderer renderer) {
         if (snowflakesList == null) return;
         renderer.begin(ShapeRenderer.ShapeType.Filled);
-        for (Snowflake s : snowflakesList) {
-            renderer.setColor(0.85f, 0.95f, 1f, s.alpha);
-            renderer.circle(s.x, s.y, s.size);
-        }
+        for (Snowflake s : snowflakesList) { renderer.setColor(0.85f, 0.95f, 1f, s.alpha); renderer.circle(s.x, s.y, s.size); }
         renderer.end();
     }
 }
