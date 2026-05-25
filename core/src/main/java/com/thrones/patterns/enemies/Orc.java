@@ -22,11 +22,11 @@ public class Orc extends Enemy{
     }
 
     @Override
-    public String getType() { 
-        return "ORC"; 
+    public String getType() {
+        return "ORC";
     }
 
-    public boolean isRageActive() { 
-        return rageActive; 
+    public boolean isRageActive() {
+        return rageActive;
     }
 }

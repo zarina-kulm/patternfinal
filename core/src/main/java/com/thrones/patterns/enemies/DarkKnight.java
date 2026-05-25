@@ -36,7 +36,7 @@ public class DarkKnight extends Enemy{
     }
 
     @Override
-    public String getType() { 
-        return "DARK_KNIGHT"; 
+    public String getType() {
+        return "DARK_KNIGHT";
     }
 }

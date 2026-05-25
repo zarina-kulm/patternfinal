@@ -18,6 +18,10 @@ public class WarOfRealms extends Game {
 
     @Override
     public void dispose() {
-        batch.dispose();
+        if (batch != null) {
+            batch.dispose();
+        }
+
+        super.dispose();
     }
 }

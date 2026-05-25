@@ -33,11 +33,11 @@ public class Dragon extends Enemy{
     }
 
     @Override
-    public String getType() { 
-        return "DRAGON"; 
+    public String getType() {
+        return "DRAGON";
     }
 
-    public boolean isEnraged() { 
-        return enraged; 
+    public boolean isEnraged() {
+        return enraged;
     }
 }

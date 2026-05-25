@@ -6,16 +6,16 @@ import com.thrones.patterns.enemies.*;
 public class SwiftwindHouseFactory implements HouseFactory {
 
     @Override
-    public Hero createHero() { return new Archer("House Swiftwind"); }
+    public Hero createHero() { return new Archer("House Stark"); }
 
     @Override
     public Enemy createEliteEnemy() { return new Dragon(); }
 
     @Override
-    public String getHouseName() { return "House Swiftwind"; }
+    public String getHouseName() { return "House Stark"; }
 
     @Override
     public String getHouseDescription() {
-        return "Swift as wind, deadly as storm. Masters of ranged combat.";
+        return "A tactical house of survivors, hunters and long-range assassins.";
     }
 }

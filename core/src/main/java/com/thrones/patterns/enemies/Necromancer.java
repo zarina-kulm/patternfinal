@@ -29,7 +29,7 @@ public class Necromancer extends Enemy{
     }
 
     @Override
-    public String getType() { 
-        return "NECROMANCER"; 
+    public String getType() {
+        return "NECROMANCER";
     }
 }
