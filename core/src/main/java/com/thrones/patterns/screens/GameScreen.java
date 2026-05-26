@@ -1,8 +1,9 @@
 package com.thrones.patterns.screens;
-
+import com.thrones.patterns.utils.WhiteWalkerAnimator;
 import com.badlogic.gdx.Gdx;import com.badlogic.gdx.Input;import com.badlogic.gdx.Screen;import com.badlogic.gdx.audio.Music;import com.badlogic.gdx.audio.Sound;import com.badlogic.gdx.graphics.Color;import com.badlogic.gdx.graphics.GL20;import com.badlogic.gdx.graphics.Texture;import com.badlogic.gdx.graphics.g2d.BitmapFont;import com.badlogic.gdx.graphics.g2d.TextureRegion;import com.badlogic.gdx.graphics.glutils.ShapeRenderer;import com.badlogic.gdx.math.MathUtils;import com.thrones.patterns.WarOfRealms;import com.thrones.patterns.characters.Hero;import com.thrones.patterns.enemies.Enemy;import com.thrones.patterns.patterns.builder.BattleConfig;import com.thrones.patterns.patterns.builder.BattleConfigBuilder;import com.thrones.patterns.patterns.facade.BattleFacade;import com.thrones.patterns.patterns.factory.HeroFactory;import com.thrones.patterns.patterns.prototype.EnemyPrototypeRegistry;import com.thrones.patterns.patterns.singleton.GameStateSingleton;import com.thrones.patterns.utils.CharacterRenderer;
 
 import java.util.ArrayList;import java.util.List;
+
 
 public class GameScreen implements Screen {
 
@@ -108,6 +109,10 @@ public class GameScreen implements Screen {
     private static final float GOBLIN_DRAW_HEIGHT = 125f;
 
     private Texture whitewalkerTex;
+    private WhiteWalkerAnimator whiteWalkerAnimator;
+    private static final float WHITEWALKER_DRAW_WIDTH = 190f;
+    private static final float WHITEWALKER_DRAW_HEIGHT = 260f;
+
     private Texture archerTex;
     private Texture mageTex;
     private Texture bombTex;
@@ -309,9 +314,12 @@ public class GameScreen implements Screen {
 
         try {
             whitewalkerTex = new Texture(Gdx.files.internal("whitewalker.png"));
+            whitewalkerTex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
         } catch (Exception e) {
             whitewalkerTex = null;
         }
+
+        whiteWalkerAnimator = new WhiteWalkerAnimator();
 
         try {
             archerTex = new Texture(Gdx.files.internal("archer.png"));
@@ -619,6 +627,10 @@ public class GameScreen implements Screen {
             heroRunCycle = 0f;
         }
 
+        if (whiteWalkerAnimator != null) {
+            whiteWalkerAnimator.update(delta);
+        }
+
         if (knightAnimator != null) {
             knightAnimator.update(delta);
 
@@ -899,6 +911,46 @@ public class GameScreen implements Screen {
     }
 
 
+
+    private boolean isWhiteWalkerEnemy(Enemy enemy) {
+        return !enemy.getType().equals("GOBLIN");
+    }
+
+    private Texture getWhiteWalkerFrame(Enemy enemy, boolean dying, boolean hit) {
+        if (whiteWalkerAnimator == null) {
+            return whitewalkerTex;
+        }
+
+        if (dying) {
+            whiteWalkerAnimator.setState(WhiteWalkerAnimator.State.DEAD);
+        } else if (hit) {
+            whiteWalkerAnimator.setState(WhiteWalkerAnimator.State.HURT);
+        } else {
+            float dx = hero.getX() - enemy.getX();
+            float dy = hero.getY() - enemy.getY();
+            float distance = (float) Math.sqrt(dx * dx + dy * dy);
+
+            if (distance <= ENEMY_ATTACK_RANGE + 10f) {
+                whiteWalkerAnimator.setState(WhiteWalkerAnimator.State.ATTACK);
+            } else {
+                whiteWalkerAnimator.setState(WhiteWalkerAnimator.State.RUN);
+            }
+        }
+
+        Texture frame = whiteWalkerAnimator.getFrame();
+        return frame != null ? frame : whitewalkerTex;
+    }
+
+    private void drawTextureFacingHero(Texture texture, float x, float y, float width, float height, boolean faceLeft) {
+        if (texture == null) return;
+
+        if (faceLeft) {
+            game.batch.draw(texture, x, y, width, height);
+        } else {
+            game.batch.draw(texture, x + width, y, -width, height);
+        }
+    }
+
     private TextureRegion getGoblinAnimationFrame(int enemyIndex, Enemy enemy) {
         if (goblinFrames == null || goblinFrames.length == 0) return null;
 
@@ -934,7 +986,14 @@ public class GameScreen implements Screen {
                     game.batch.setColor(Color.WHITE);
                 }
 
-                game.batch.draw(frame, hero.getX() - 20, hero.getY(), 130, 170);
+                Enemy target = getTarget();
+                boolean heroFaceLeft = target != null && target.getX() < hero.getX();
+
+                if (heroFaceLeft) {
+                    game.batch.draw(frame, hero.getX() - 20 + 130, hero.getY(), -130, 170);
+                } else {
+                    game.batch.draw(frame, hero.getX() - 20, hero.getY(), 130, 170);
+                }
                 game.batch.setColor(Color.WHITE);
             } else {
                 game.batch.end();
@@ -955,8 +1014,14 @@ public class GameScreen implements Screen {
 
                 if (heroHit) game.batch.setColor(1f, 0.3f, 0.3f, 1f);
                 else game.batch.setColor(Color.WHITE);
+                Enemy target = getTarget();
+                boolean heroFaceLeft = target != null && target.getX() < hero.getX();
 
-                game.batch.draw(texture, hero.getX() - 10 + attackOffX, hero.getY() + bobY, 90, 150);
+                if (heroFaceLeft) {
+                    game.batch.draw(texture, hero.getX() - 10 + attackOffX + 90, hero.getY() + bobY, -90, 150);
+                } else {
+                    game.batch.draw(texture, hero.getX() - 10 + attackOffX, hero.getY() + bobY, 90, 150);
+                }
                 game.batch.setColor(Color.WHITE);
             } else {
                 game.batch.end();
@@ -1003,18 +1068,38 @@ public class GameScreen implements Screen {
                 if (i < enemyDying.length && enemyDying[i] && enemyDeathTimer[i] > 0) {
                     float progress = 1f - (enemyDeathTimer[i] / 0.5f);
                     float alpha = enemyDeathTimer[i] / 0.5f;
-                    Texture deadTexture = enemy.getType().equals("GOBLIN") ? goblinTex : whitewalkerTex;
+                    if (enemy.getType().equals("GOBLIN")) {
+                        Texture deadTexture = goblinTex;
 
-                    if (deadTexture != null) {
-                        game.batch.setColor(1f, 0.3f, 0.3f, alpha);
-                        game.batch.draw(
-                            deadTexture,
-                            enemy.getX() - 5,
-                            enemy.getY() - progress * 40f,
-                            70,
-                            110 * (1f - progress * 0.5f)
-                        );
-                        game.batch.setColor(Color.WHITE);
+                        if (deadTexture != null) {
+                            game.batch.setColor(1f, 0.3f, 0.3f, alpha);
+                            game.batch.draw(
+                                deadTexture,
+                                enemy.getX() - 5,
+                                enemy.getY() - progress * 40f,
+                                70,
+                                110 * (1f - progress * 0.5f)
+                            );
+                            game.batch.setColor(Color.WHITE);
+                        }
+                    } else {
+                        Texture deadTexture = getWhiteWalkerFrame(enemy, true, false);
+
+                        if (deadTexture != null) {
+                            game.batch.setColor(1f, 1f, 1f, alpha);
+                            boolean faceLeft = hero.getX() > enemy.getX();
+
+                            drawTextureFacingHero(
+                                deadTexture,
+                                enemy.getX() - 70,
+                                enemy.getY() - 35 - progress * 40f,
+                                WHITEWALKER_DRAW_WIDTH,
+                                WHITEWALKER_DRAW_HEIGHT * (1f - progress * 0.35f),
+                                faceLeft
+                            );
+
+                            game.batch.setColor(Color.WHITE);
+                        }
                     }
                 }
 
@@ -1052,20 +1137,51 @@ public class GameScreen implements Screen {
                     break;
             }
 
-            if (enemy.getType().equals("GOBLIN") && goblinFrames != null) {
+            if (isWhiteWalkerEnemy(enemy) && whiteWalkerAnimator != null) {
+                Texture whiteWalkerFrame = getWhiteWalkerFrame(enemy, false, hit);
+
+                if (hit) game.batch.setColor(1f, 0.35f, 0.35f, 1f);
+                else game.batch.setColor(Color.WHITE);
+
+                boolean faceLeft = hero.getX()  >  enemy.getX();
+
+                drawTextureFacingHero(
+                    whiteWalkerFrame,
+                    enemy.getX() - 70 + shakeX,
+                    enemy.getY() - 25 + enemyBob,
+                    WHITEWALKER_DRAW_WIDTH,
+                    WHITEWALKER_DRAW_HEIGHT,
+                    faceLeft
+                );
+
+                game.batch.setColor(Color.WHITE);
+            } else if (enemy.getType().equals("GOBLIN") && goblinFrames != null) {
                 TextureRegion goblinFrame = getGoblinAnimationFrame(i, enemy);
 
                 if (hit) game.batch.setColor(1f, 0.3f, 0.3f, 1f);
                 else game.batch.setColor(Color.WHITE);
+                boolean goblinFaceLeft = hero.getX() < enemy.getX();
 
-                game.batch.draw(
-                    goblinFrame,
-                    enemy.getX() - 45 + shakeX,
-                    enemy.getY() - 10 + enemyBob,
-                    GOBLIN_DRAW_WIDTH,
-                    GOBLIN_DRAW_HEIGHT
-                );
+                if (goblinFaceLeft) {
 
+                    game.batch.draw(
+                        goblinFrame,
+                        enemy.getX() - 45 + shakeX,
+                        enemy.getY() - 10 + enemyBob,
+                        GOBLIN_DRAW_WIDTH,
+                        GOBLIN_DRAW_HEIGHT
+                    );
+
+                } else {
+
+                    game.batch.draw(
+                        goblinFrame,
+                        enemy.getX() - 45 + shakeX + GOBLIN_DRAW_WIDTH,
+                        enemy.getY() - 10 + enemyBob,
+                        -GOBLIN_DRAW_WIDTH,
+                        GOBLIN_DRAW_HEIGHT
+                    );
+                }
                 game.batch.setColor(Color.WHITE);
             } else if (enemyTexture != null) {
                 if (hit) game.batch.setColor(1f, 0.3f, 0.3f, 1f);
@@ -1396,6 +1512,7 @@ public class GameScreen implements Screen {
         if (goblinTex != null) goblinTex.dispose();
         if (goblinSheet != null) goblinSheet.dispose();
         if (whitewalkerTex != null) whitewalkerTex.dispose();
+        if (whiteWalkerAnimator != null) whiteWalkerAnimator.dispose();
         if (archerTex != null) archerTex.dispose();
         if (mageTex != null) mageTex.dispose();
         if (bombTex != null) bombTex.dispose();
