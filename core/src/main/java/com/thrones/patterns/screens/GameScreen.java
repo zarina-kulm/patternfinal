@@ -1322,21 +1322,32 @@ public class GameScreen implements Screen {
     private void drawControls() {
         font.getData().setScale(0.82f);
 
+        int x = 20;
         int y = 155;
-        int spacing = 20;
+        int gap = 20;
 
         font.setColor(Color.WHITE);
-        font.draw(game.batch, "[W/A/S/D] Move", 20, y);
+        font.draw(game.batch, "[W/A/S/D] Move", x, y);
 
         font.setColor(attackCD > 0 ? Color.GRAY : Color.GREEN);
-        font.draw(game.batch, "[SPACE] Attack" + (attackCD > 0 ? " (Cooling)" : " [READY]"), 20, y - spacing);
+        font.draw(
+            game.batch,
+            "[SPACE] Attack" + (attackCD > 0 ? " (" + (int) attackCD + "s)" : " [READY]"),
+            x,
+            y - gap
+        );
 
-        cd("[Q]", "Shield", shieldCD, Color.CYAN, y - spacing * 2);
-        cd("[E]", "Hero Skill", abilityCD, Color.ORANGE, y - spacing * 3);
-        cd("[B]", "Bomb", bombCD, Color.ORANGE, y - spacing * 4);
+        font.setColor(bombCD > 0 || bombsRemaining <= 0 ? Color.GRAY : Color.ORANGE);
+        font.draw(
+            game.batch,
+            "[B] Bomb" +
+                (bombsRemaining <= 0 ? " [0]" : bombCD > 0 ? " (" + (int) bombCD + "s)" : " [READY]"),
+            x,
+            y - gap * 2
+        );
 
         font.setColor(Color.DARK_GRAY);
-        font.draw(game.batch, "[TAB] Target  |  [ESC] Menu", 20, y - spacing * 5 - 4);
+        font.draw(game.batch, "[TAB] Target  |  [ESC] Menu", x, y - gap * 3);
 
         font.getData().setScale(1f);
     }
