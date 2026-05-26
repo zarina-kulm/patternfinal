@@ -109,8 +109,8 @@ public class GameScreen implements Screen {
 
     private Texture whitewalkerTex;
     private WhiteWalkerAnimator whiteWalkerAnimator;
-    private static final float WHITEWALKER_DRAW_WIDTH = 135f;
-    private static final float WHITEWALKER_DRAW_HEIGHT = 190f;
+    private static final float WHITEWALKER_DRAW_WIDTH = 140f;
+    private static final float WHITEWALKER_DRAW_HEIGHT = 200f;
 
     private Texture archerTex;
     private Texture mageTex;
@@ -931,8 +931,10 @@ public class GameScreen implements Screen {
 
             if (distance <= ENEMY_ATTACK_RANGE + 10f) {
                 whiteWalkerAnimator.setState(WhiteWalkerAnimator.State.ATTACK);
-            } else {
+            } else if (distance > ENEMY_ATTACK_RANGE + 120f) {
                 whiteWalkerAnimator.setState(WhiteWalkerAnimator.State.RUN);
+            } else {
+                whiteWalkerAnimator.setState(WhiteWalkerAnimator.State.IDLE);
             }
         }
 
