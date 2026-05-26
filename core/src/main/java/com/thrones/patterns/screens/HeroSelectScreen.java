@@ -161,6 +161,10 @@ public class HeroSelectScreen implements Screen {
         GameStateSingleton state = GameStateSingleton.getInstance();
         state.reset();
         state.setSelectedHeroType(heroTypes[selected]);
+        if (MainMenuScreen.menuMusic != null) {
+            MainMenuScreen.menuMusic.stop();
+        }
+
         game.setScreen(new GameScreen(game));
     }
 

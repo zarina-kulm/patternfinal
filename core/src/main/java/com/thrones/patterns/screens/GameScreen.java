@@ -210,6 +210,7 @@ public class GameScreen implements Screen {
 
     @Override
     public void show() {
+        MainMenuScreen.stopMenuMusic();
         sr = new ShapeRenderer();
         font = new BitmapFont();
 
@@ -246,12 +247,15 @@ public class GameScreen implements Screen {
         }
 
         try {
-            battleMusic = Gdx.audio.newMusic(Gdx.files.internal("sounds/battle_theme.mp3"));
+            battleMusic = Gdx.audio.newMusic(
+                Gdx.files.internal("sounds/theme.mp3")
+            );
             battleMusic.setLooping(true);
-            battleMusic.setVolume(0.25f);
+            battleMusic.setVolume(0.35f);
             battleMusic.play();
         } catch (Exception e) {
             battleMusic = null;
+            System.out.println("BATTLE MUSIC NOT FOUND");
         }
 
         try {

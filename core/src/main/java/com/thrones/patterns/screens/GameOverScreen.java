@@ -1,5 +1,5 @@
 package com.thrones.patterns.screens;
-
+import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Preferences;
@@ -19,7 +19,7 @@ public class GameOverScreen implements Screen {
     private ShapeRenderer sr;
     private Texture bgTexture;
     private float time = 0f;
-
+    private Music defeatMusic;
     private int bestScore, bestLevel;
     private int currentScore, currentLevel;
     private boolean isNewRecord;
@@ -261,16 +261,39 @@ public class GameOverScreen implements Screen {
         }
     }
 
-    @Override public void show() {}
+    @Override
+    public void show() {
+        try {
+            defeatMusic = Gdx.audio.newMusic(
+                Gdx.files.internal("sounds/defeat_theme.mp3")
+            );
+
+            defeatMusic.setLooping(false);
+            defeatMusic.setVolume(0.45f);
+            defeatMusic.play();
+
+        } catch (Exception e) {
+            defeatMusic = null;
+            System.out.println("DEFEAT MUSIC NOT FOUND");
+        }
+    }
     @Override public void resize(int w, int h) {}
     @Override public void pause() {}
     @Override public void resume() {}
-    @Override public void hide() {}
+    @Override
+    public void hide() {
+        if (defeatMusic != null) {
+            defeatMusic.stop();
+        }
+    }
 
     @Override
     public void dispose() {
         if (font != null) font.dispose();
         if (sr != null) sr.dispose();
         if (bgTexture != null) bgTexture.dispose();
+        if (defeatMusic != null) {
+            defeatMusic.dispose();
+        }
     }
 }

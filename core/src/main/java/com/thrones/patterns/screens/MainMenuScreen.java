@@ -1,5 +1,5 @@
 package com.thrones.patterns.screens;
-
+import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
@@ -12,12 +12,13 @@ public class MainMenuScreen implements Screen {
 
     private final WarOfRealms game;
     private Texture backgroundTexture;
+    public static Music menuMusic;
 
     // 1280x720 экранға нақты пиксель позициялары
     private static final float START_X = 490f, START_Y = 218f;
-    private static final float MENU_X  = 490f, MENU_Y  = 138f;
-    private static final float EXIT_X  = 490f, EXIT_Y  = 55f;
-    private static final float BTN_W   = 300f, BTN_H   = 58f;
+    private static final float MENU_X = 490f, MENU_Y = 138f;
+    private static final float EXIT_X = 490f, EXIT_Y = 55f;
+    private static final float BTN_W = 300f, BTN_H = 58f;
 
     public MainMenuScreen(WarOfRealms game) {
         this.game = game;
@@ -79,14 +80,57 @@ public class MainMenuScreen implements Screen {
         }
     }
 
-    @Override public void show() {}
-    @Override public void resize(int w, int h) {}
-    @Override public void pause() {}
-    @Override public void resume() {}
-    @Override public void hide() {}
+    @Override
+    public void show() {
+        try {
+            if (menuMusic == null) {
+                menuMusic = Gdx.audio.newMusic(
+                    Gdx.files.internal("sounds/theme.mp3")
+                );
+                menuMusic.setLooping(true);
+                menuMusic.setVolume(0.2f);
+            }
+
+            if (!menuMusic.isPlaying()) {
+                menuMusic.play();
+            }
+
+        } catch (Exception e) {
+            menuMusic = null;
+            System.out.println("MENU MUSIC NOT FOUND");
+        }
+    }
+
+    @Override
+    public void resize(int w, int h) {
+    }
+
+    @Override
+    public void pause() {
+    }
+
+    @Override
+    public void resume() {
+    }
+
+    @Override
+    public void hide() {
+//        if (menuMusic != null) {
+//            menuMusic.stop();
+//        }
+    }
 
     @Override
     public void dispose() {
+        if (menuMusic != null) {
+            menuMusic.dispose();
+            menuMusic = null;
+        }
         backgroundTexture.dispose();
+    }
+        public static void stopMenuMusic () {
+            if (menuMusic != null) {
+                menuMusic.stop();
+            }
     }
 }
