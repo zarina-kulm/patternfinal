@@ -1,9 +1,8 @@
 package com.thrones.patterns.screens;
-
+import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
-import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
@@ -34,34 +33,51 @@ public class VictoryScreen implements Screen {
         font = new BitmapFont();
         sr = new ShapeRenderer();
 
-        // ── background3.jpeg ФОНДЫҚ СУРЕТІН ЖҮКТЕУ ──
+        loadBackground();
+        loadPortrait();
+        loadVictoryMusic();
+    }
+
+    private void loadBackground() {
         try {
-            background = new Texture("background3.jpeg");
+            background = new Texture(Gdx.files.internal("background3.jpeg"));
         } catch (Exception e) {
             try {
-                // Егер assets түбінен таппаса, ui/backgrounds/ ішінен іздейді
-                background = new Texture("ui/backgrounds/background3.jpeg");
+                background = new Texture(Gdx.files.internal("ui/backgrounds/background3.jpeg"));
             } catch (Exception ex) {
                 background = null;
-                Gdx.app.log("VictoryScreen", "Error: background3.jpeg not found!");
+                System.out.println("VICTORY BACKGROUND NOT FOUND");
             }
         }
+    }
 
-        // Портретті жүктеу
+    private void loadPortrait() {
         try {
             kingPortrait = new Texture(Gdx.files.internal("jon_snow_portrait.png"));
         } catch (Exception e) {
             kingPortrait = null;
+            System.out.println("KING PORTRAIT NOT FOUND");
         }
+    }
 
-        // Музыканы жүктеу және қосу
+    private void loadVictoryMusic() {
         try {
-            victoryMusic = Gdx.audio.newMusic(Gdx.files.internal("sounds/victory_theme.mp3"));
-            victoryMusic.setLooping(true);
-            victoryMusic.setVolume(0.35f);
+            System.out.println("Trying to load victory music...");
+
+            victoryMusic = Gdx.audio.newMusic(
+                Gdx.files.internal("sounds/victory_theme.mp3")
+            );
+
+            victoryMusic.setLooping(false);
+            victoryMusic.setVolume(1.0f);
             victoryMusic.play();
+
+            System.out.println("VICTORY MUSIC PLAYING");
+
         } catch (Exception e) {
             victoryMusic = null;
+            System.out.println("VICTORY MUSIC NOT FOUND OR CANNOT PLAY");
+            e.printStackTrace();
         }
     }
 
@@ -69,53 +85,57 @@ public class VictoryScreen implements Screen {
     public void render(float delta) {
         time += delta;
 
-
         Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-
-        game.batch.begin();
-        if (background != null) {
-            game.batch.setColor(Color.WHITE);
-            game.batch.draw(background, 0, 0, 1280, 720); // Толық экран өлшемі
-        }
-        game.batch.end();
-
-
-        Gdx.gl.glEnable(GL20.GL_BLEND);
-        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
-
-        sr.begin(ShapeRenderer.ShapeType.Filled);
-        sr.setColor(0f, 0f, 0f, 0.35f); // 35% күңгірт қара фильтр
-        sr.rect(0, 0, 1280, 720);
-        sr.end();
-
-        Gdx.gl.glDisable(GL20.GL_BLEND);
-
-
+        drawBackground();
+        drawDarkOverlay();
         drawPanels();
         drawTextAndPortrait();
 
         handleInput();
     }
 
+    private void drawBackground() {
+        game.batch.begin();
+
+        if (background != null) {
+            game.batch.setColor(Color.WHITE);
+            game.batch.draw(background, 0, 0, 1280, 720);
+        }
+
+        game.batch.end();
+    }
+
+    private void drawDarkOverlay() {
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+
+        sr.begin(ShapeRenderer.ShapeType.Filled);
+        sr.setColor(0f, 0f, 0f, 0.35f);
+        sr.rect(0, 0, 1280, 720);
+        sr.end();
+
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
     private void drawPanels() {
-        float panelGlow = (float) (Math.sin(time * 2f) * 0.08f + 0.28f);
+        float panelGlow =
+            (float) (Math.sin(time * 2f) * 0.08f + 0.28f);
 
         Gdx.gl.glEnable(GL20.GL_BLEND);
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
 
         sr.begin(ShapeRenderer.ShapeType.Filled);
         sr.setColor(0f, 0f, 0f, 0.75f);
-        sr.rect(285, 430, 710, 185); // Жоғарғы панель
-        sr.rect(285, 135, 710, 225); // Төменгі панель
+        sr.rect(285, 430, 710, 185);
+        sr.rect(285, 135, 710, 225);
         sr.end();
 
         Gdx.gl.glDisable(GL20.GL_BLEND);
 
-
         sr.begin(ShapeRenderer.ShapeType.Line);
-        sr.setColor(Color.GOLD);
+        sr.setColor(1f, 0.75f + panelGlow, 0f, 1f);
         sr.rect(285, 430, 710, 185);
         sr.rect(285, 135, 710, 225);
         sr.end();
@@ -126,19 +146,25 @@ public class VictoryScreen implements Screen {
 
         game.batch.begin();
 
-
         font.getData().setScale(2.8f);
         font.setColor(Color.GOLD);
         font.draw(game.batch, "THE THRONE IS YOURS", 330, 585);
 
         font.getData().setScale(1.05f);
         font.setColor(new Color(0.86f, 0.78f, 0.62f, 1f));
-        font.draw(game.batch, "After seven brutal battles, the Last Heir reclaimed the cursed throne.", 335, 535);
-        font.draw(game.batch, "But every crown is built on blood, betrayal and sacrifice.", 390, 505);
-
+        font.draw(game.batch,
+            "After seven brutal battles, the Last Heir reclaimed the cursed throne.",
+            335,
+            535
+        );
+        font.draw(game.batch,
+            "But every crown is built on blood, betrayal and sacrifice.",
+            390,
+            505
+        );
 
         if (kingPortrait != null) {
-            game.batch.setColor(1f, 1f, 1f, 1f);
+            game.batch.setColor(Color.WHITE);
             game.batch.draw(kingPortrait, 320, 175, 140, 140);
         }
 
@@ -155,16 +181,24 @@ public class VictoryScreen implements Screen {
         font.setColor(Color.GOLD);
         font.draw(game.batch, "Title earned: King of the War Realms", 520, 195);
 
-        // ── БАСҚАРУ БАТЫРМАЛАРЫ ──
         font.getData().setScale(0.9f);
         font.setColor(Color.YELLOW);
-        font.draw(game.batch, "ENTER - return to main menu  |  ESC - exit", 430, 85);
+        font.draw(game.batch,
+            "ENTER - return to main menu  |  ESC - exit",
+            430,
+            85
+        );
 
         font.getData().setScale(0.82f);
         font.setColor(new Color(0.75f, 0.70f, 0.65f, 1f));
-        font.draw(game.batch, "The war is over. The realm remembers your name.", 435, 55);
+        font.draw(game.batch,
+            "The war is over. The realm remembers your name.",
+            435,
+            55
+        );
 
         font.getData().setScale(1f);
+        game.batch.setColor(Color.WHITE);
         game.batch.end();
     }
 
@@ -176,6 +210,7 @@ public class VictoryScreen implements Screen {
         }
 
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+            stopMusic();
             Gdx.app.exit();
         }
     }
@@ -201,6 +236,10 @@ public class VictoryScreen implements Screen {
         if (sr != null) sr.dispose();
         if (background != null) background.dispose();
         if (kingPortrait != null) kingPortrait.dispose();
-        if (victoryMusic != null) victoryMusic.dispose();
+
+        if (victoryMusic != null) {
+            victoryMusic.dispose();
+            victoryMusic = null;
+        }
     }
 }
